@@ -33,7 +33,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { runStatusColors, pillarColors, statusColors } from "@/lib/pillars";
+import { runStatusColors, statusColors } from "@/lib/pillars";
 
 export default function DiscoveryJobDetailPage() {
   const params = useParams();
