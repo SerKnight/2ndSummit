@@ -150,7 +150,7 @@ export default function PromptTemplatesPage() {
     try {
       await setDefault({ id });
       toast.success("Default template updated");
-    } catch (error) {
+    } catch {
       toast.error("Failed to set default");
     }
   };
@@ -163,7 +163,7 @@ export default function PromptTemplatesPage() {
       } else {
         toast.info(result.message);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to seed templates");
     }
   };

@@ -501,7 +501,6 @@ function MemberHome() {
 }
 
 function OnboardingStep({
-  step,
   title,
   description,
   completed,

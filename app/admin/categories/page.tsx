@@ -110,7 +110,7 @@ export default function CategoriesPage() {
       } else {
         toast.info(result.message);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to seed categories");
     }
   };

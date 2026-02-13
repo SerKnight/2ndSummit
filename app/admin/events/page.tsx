@@ -82,7 +82,6 @@ export default function EventsPage() {
   const rejectEvent = useMutation(api.events.reject);
   const bulkUpdateStatus = useMutation(api.events.bulkUpdateStatus);
   const createEvent = useMutation(api.events.create);
-  const updateEvent = useMutation(api.events.update);
   const triggerClassification = useMutation(api.classify.triggerClassification);
 
   const [form, setForm] = useState({
@@ -157,7 +156,7 @@ export default function EventsPage() {
       await bulkUpdateStatus({ ids, status });
       toast.success(`${ids.length} events updated to ${status}`);
       setSelectedIds(new Set());
-    } catch (error) {
+    } catch {
       toast.error("Bulk update failed");
     }
   };
@@ -173,7 +172,7 @@ export default function EventsPage() {
       toast.success(
         "Classification started — uncategorized events will update in real-time"
       );
-    } catch (error) {
+    } catch {
       toast.error("Failed to start classification");
     }
   };

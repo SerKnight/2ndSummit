@@ -211,7 +211,7 @@ export default function NewDiscoveryRunPage() {
       } else {
         toast.info(result.message);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to seed templates");
     }
   };
