@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useState, useMemo } from "react";
+import { usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
@@ -13,13 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -35,23 +29,76 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
-import { ScrollText } from "lucide-react";
+import { ScrollText, Loader2 } from "lucide-react";
+
+const actionTabs = [
+  { value: "all", label: "All" },
+  { value: "discovery", label: "Discovery" },
+  { value: "validation", label: "Validation" },
+  { value: "crawl_extraction", label: "Crawl" },
+  { value: "market_sources", label: "Market Sources" },
+  { value: "category_prompt", label: "Category Prompt" },
+] as const;
+
+const providerTabs = [
+  { value: "all", label: "All Providers" },
+  { value: "openai", label: "OpenAI" },
+  { value: "perplexity", label: "Perplexity" },
+] as const;
+
+const timeTabs = [
+  { value: "today", label: "Today" },
+  { value: "7d", label: "Last 7 Days" },
+  { value: "30d", label: "Last 30 Days" },
+  { value: "all", label: "All Time" },
+] as const;
+
+function computeSince(timeFilter: string): number | undefined {
+  const now = new Date();
+  switch (timeFilter) {
+    case "today": {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return start.getTime();
+    }
+    case "7d":
+      return now.getTime() - 7 * 24 * 60 * 60 * 1000;
+    case "30d":
+      return now.getTime() - 30 * 24 * 60 * 60 * 1000;
+    default:
+      return undefined;
+  }
+}
+
+const PAGE_SIZE = 50;
 
 export default function LogsPage() {
   const [providerFilter, setProviderFilter] = useState<string>("all");
   const [actionFilter, setActionFilter] = useState<string>("all");
+  const [timeFilter, setTimeFilter] = useState<string>("7d");
   const [selectedLogId, setSelectedLogId] = useState<Id<"llmLogs"> | null>(
     null
   );
 
-  const queryArgs: {
-    provider?: string;
-    action?: string;
-  } = {};
-  if (providerFilter !== "all") queryArgs.provider = providerFilter;
-  if (actionFilter !== "all") queryArgs.action = actionFilter;
+  const since = useMemo(() => computeSince(timeFilter), [timeFilter]);
 
-  const logs = useQuery(api.llmLogs.list, queryArgs);
+  const queryArgs = useMemo(() => {
+    const args: {
+      provider?: string;
+      action?: string;
+      since?: number;
+    } = {};
+    if (providerFilter !== "all") args.provider = providerFilter;
+    if (actionFilter !== "all") args.action = actionFilter;
+    if (since) args.since = since;
+    return args;
+  }, [providerFilter, actionFilter, since]);
+
+  const { results: logs, status, loadMore } = usePaginatedQuery(
+    api.llmLogs.listPaginated,
+    queryArgs,
+    { initialNumItems: PAGE_SIZE }
+  );
+
   const selectedLog = useQuery(
     api.llmLogs.get,
     selectedLogId ? { id: selectedLogId } : "skip"
@@ -83,50 +130,11 @@ export default function LogsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">LLM Logs</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Logs</h1>
         <p className="text-muted-foreground">
           Audit log of all LLM API calls — prompts, responses, and metadata
         </p>
       </div>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-4">
-            <div className="space-y-2">
-              <Label>Provider</Label>
-              <Select value={providerFilter} onValueChange={setProviderFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Providers</SelectItem>
-                  <SelectItem value="perplexity">Perplexity</SelectItem>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Action</Label>
-              <Select value={actionFilter} onValueChange={setActionFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Actions</SelectItem>
-                  <SelectItem value="discovery">Discovery</SelectItem>
-                  <SelectItem value="validation">Validation</SelectItem>
-                  <SelectItem value="category_prompt_generation">Category Prompt</SelectItem>
-                  <SelectItem value="market_source_generation">Market Sources</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Logs Table */}
       <Card>
@@ -136,11 +144,60 @@ export default function LogsPage() {
             API Call Logs
           </CardTitle>
           <CardDescription>
-            {logs ? `${logs.length} log entries` : "Loading..."}
+            {logs ? `${logs.length} log entries loaded` : "Loading..."}
+            {status === "CanLoadMore" && " (more available)"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {logs === undefined ? (
+        <CardContent className="space-y-4">
+          {/* Filter tabs row */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            {/* Time filter tabs */}
+            <div className="flex items-center gap-1">
+              {timeTabs.map((tab) => (
+                <Button
+                  key={tab.value}
+                  variant={timeFilter === tab.value ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setTimeFilter(tab.value)}
+                >
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
+
+            {/* Action tabs */}
+            <div className="flex items-center gap-1 border-l pl-4">
+              {actionTabs.map((tab) => (
+                <Button
+                  key={tab.value}
+                  variant={actionFilter === tab.value ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setActionFilter(tab.value)}
+                >
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
+
+            {/* Provider tabs */}
+            <div className="flex items-center gap-1 border-l pl-4">
+              {providerTabs.map((tab) => (
+                <Button
+                  key={tab.value}
+                  variant={providerFilter === tab.value ? "default" : "ghost"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setProviderFilter(tab.value)}
+                >
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {status === "LoadingFirstPage" ? (
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map((i) => (
                 <Skeleton key={i} className="h-12 w-full" />
@@ -148,64 +205,85 @@ export default function LogsPage() {
             </div>
           ) : logs.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">
-              No LLM logs yet. Run an event discovery job to see API
-              calls logged here.
+              No LLM logs found for the selected filters.
             </p>
           ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Timestamp</TableHead>
-                    <TableHead>Provider</TableHead>
-                    <TableHead>Model</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Duration</TableHead>
-                    <TableHead>Tokens</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {logs.map((log) => (
-                    <TableRow
-                      key={log._id}
-                      className="cursor-pointer"
-                      onClick={() => setSelectedLogId(log._id)}
-                    >
-                      <TableCell className="text-sm">
-                        {new Date(log.createdAt).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {log.provider}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {log.model}
-                      </TableCell>
-                      <TableCell className="capitalize">
-                        {log.action}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            log.status === "success" ? "default" : "destructive"
-                          }
-                        >
-                          {log.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {formatDuration(log.durationMs)}
-                      </TableCell>
-                      <TableCell className="tabular-nums">
-                        {log.tokensUsed ?? "—"}
-                      </TableCell>
+            <>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Timestamp</TableHead>
+                      <TableHead>Provider</TableHead>
+                      <TableHead>Model</TableHead>
+                      <TableHead>Action</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Tokens</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {logs.map((log) => (
+                      <TableRow
+                        key={log._id}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedLogId(log._id)}
+                      >
+                        <TableCell className="text-sm">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {log.provider}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {log.model}
+                        </TableCell>
+                        <TableCell className="capitalize">
+                          {log.action.replace(/_/g, " ")}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              log.status === "success" ? "default" : "destructive"
+                            }
+                          >
+                            {log.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {formatDuration(log.durationMs)}
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {log.tokensUsed ?? "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination */}
+              {status === "CanLoadMore" && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => loadMore(PAGE_SIZE)}
+                  >
+                    Load More
+                  </Button>
+                </div>
+              )}
+              {status === "LoadingMore" && (
+                <div className="flex justify-center pt-2">
+                  <Button variant="outline" disabled>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -241,7 +319,7 @@ export default function LogsPage() {
                   <Label className="text-xs text-muted-foreground">
                     Action
                   </Label>
-                  <p className="text-sm capitalize">{selectedLog.action}</p>
+                  <p className="text-sm capitalize">{selectedLog.action.replace(/_/g, " ")}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">

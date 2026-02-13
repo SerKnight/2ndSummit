@@ -1,4 +1,5 @@
 import { internalMutation, query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 
 export const list = query({
@@ -44,6 +45,32 @@ export const list = query({
     }
 
     return logs;
+  },
+});
+
+export const listPaginated = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    provider: v.optional(v.string()),
+    action: v.optional(v.string()),
+    since: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let q = ctx.db
+      .query("llmLogs")
+      .withIndex("by_createdAt", (q) =>
+        args.since ? q.gte("createdAt", args.since) : q
+      )
+      .order("desc");
+
+    if (args.provider) {
+      q = q.filter((f) => f.eq(f.field("provider"), args.provider!));
+    }
+    if (args.action) {
+      q = q.filter((f) => f.eq(f.field("action"), args.action!));
+    }
+
+    return await q.paginate(args.paginationOpts);
   },
 });
 

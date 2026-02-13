@@ -21,7 +21,7 @@ const navItems = [
   { href: "/admin/events", label: "Events", icon: Calendar },
   { href: "/admin/categories", label: "Categories", icon: Tag },
   { href: "/admin/discovery", label: "Event Discovery", icon: Sparkles },
-  { href: "/admin/logs", label: "LLM Logs", icon: ScrollText },
+  { href: "/admin/logs", label: "Logs", icon: ScrollText },
   { href: "/admin/users", label: "Users", icon: Users },
 ];
 

@@ -405,6 +405,7 @@ export const createFromDiscovery = internalMutation({
     validationConfidence: v.optional(v.number()),
     validationNotes: v.optional(v.string()),
     discoveryJobId: v.id("eventDiscoveryJobs"),
+    source: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -460,7 +461,7 @@ export const createFromDiscovery = internalMutation({
       title: args.title,
       description: args.description,
       briefSummary: args.briefSummary,
-      source: "perplexity_discovery",
+      source: args.source ?? "perplexity_discovery",
       sourceUrl: args.sourceUrl,
       sourceDomain,
       sourceExtractedAt: now,

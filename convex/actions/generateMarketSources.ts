@@ -104,14 +104,19 @@ Find the top local event sources — websites, community calendars, parks & rec 
         marketId: args.marketId,
       });
 
-      // Update market with generated sources
+      // Add generated sources to marketSources table
       const sources = Array.isArray(content.sources) ? content.sources : [];
       const context =
         typeof content.context === "string" ? content.context : "";
 
-      await ctx.runMutation(internal.markets.updateSources, {
+      await ctx.runMutation(internal.marketSources.bulkReplace, {
+        marketId: args.marketId,
+        urls: sources,
+      });
+
+      // Update market context
+      await ctx.runMutation(internal.markets.updateSourceContext, {
         id: args.marketId,
-        searchSources: sources,
         sourcePromptContext: context,
       });
     } catch (error) {

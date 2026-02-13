@@ -22,3 +22,30 @@ export const runStatusColors: Record<string, string> = {
   completed: "bg-green-100 text-green-800 border-green-300",
   failed: "bg-red-100 text-red-800 border-red-300",
 };
+
+export const PILLAR_STYLES: Record<
+  string,
+  { bg: string; text: string; dot: string; badge: string; border: string }
+> = {
+  Move: {
+    bg: "bg-emerald-50 hover:bg-emerald-100 border-emerald-200",
+    text: "text-emerald-800",
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-100 text-emerald-700 border-emerald-300",
+    border: "border-emerald-400",
+  },
+  Discover: {
+    bg: "bg-amber-50 hover:bg-amber-100 border-amber-200",
+    text: "text-amber-800",
+    dot: "bg-amber-500",
+    badge: "bg-amber-100 text-amber-700 border-amber-300",
+    border: "border-amber-400",
+  },
+  Connect: {
+    bg: "bg-purple-50 hover:bg-purple-100 border-purple-200",
+    text: "text-purple-800",
+    dot: "bg-purple-500",
+    badge: "bg-purple-100 text-purple-700 border-purple-300",
+    border: "border-purple-400",
+  },
+};

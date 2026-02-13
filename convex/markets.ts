@@ -7,14 +7,22 @@ export const list = query({
   args: {},
   handler: async (ctx) => {
     const markets = await ctx.db.query("markets").collect();
-    // Attach event counts
+    // Attach event counts and source counts
     return Promise.all(
       markets.map(async (market) => {
         const events = await ctx.db
           .query("events")
           .withIndex("by_market", (q) => q.eq("marketId", market._id))
           .collect();
-        return { ...market, eventCount: events.length };
+        const sources = await ctx.db
+          .query("marketSources")
+          .withIndex("by_market", (q) => q.eq("marketId", market._id))
+          .collect();
+        return {
+          ...market,
+          eventCount: events.length,
+          sourceCount: sources.length,
+        };
       })
     );
   },
@@ -114,60 +122,14 @@ export const regenerateSources = mutation({
   },
 });
 
-export const addSource = mutation({
+// Internal mutation for AI-generated source context
+export const updateSourceContext = internalMutation({
   args: {
     id: v.id("markets"),
-    source: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
-
-    const market = await ctx.db.get(args.id);
-    if (!market) throw new Error("Market not found");
-
-    const sources = market.searchSources ?? [];
-    const trimmed = args.source.trim();
-    if (!trimmed) throw new Error("Source cannot be empty");
-    if (sources.includes(trimmed)) throw new Error("Source already exists");
-
-    await ctx.db.patch(args.id, {
-      searchSources: [...sources, trimmed],
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-export const removeSource = mutation({
-  args: {
-    id: v.id("markets"),
-    source: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
-
-    const market = await ctx.db.get(args.id);
-    if (!market) throw new Error("Market not found");
-
-    const sources = market.searchSources ?? [];
-    await ctx.db.patch(args.id, {
-      searchSources: sources.filter((s) => s !== args.source),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-// Internal mutation for actions to update sources
-export const updateSources = internalMutation({
-  args: {
-    id: v.id("markets"),
-    searchSources: v.array(v.string()),
     sourcePromptContext: v.string(),
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
-      searchSources: args.searchSources,
       sourcePromptContext: args.sourcePromptContext,
       updatedAt: Date.now(),
     });

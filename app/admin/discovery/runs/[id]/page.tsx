@@ -31,7 +31,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Globe } from "lucide-react";
 import Link from "next/link";
 import { runStatusColors, statusColors } from "@/lib/pillars";
 
@@ -125,7 +125,20 @@ export default function DiscoveryJobDetailPage() {
               </Badge>
             </div>
             <p className="text-muted-foreground">
-              {job.categoryName}
+              {job.discoveryMethod === "crawl" ? (
+                <>
+                  <Badge
+                    variant="outline"
+                    className="mr-2 bg-emerald-100 text-emerald-800 border-emerald-300"
+                  >
+                    <Globe className="mr-1 h-3 w-3" />
+                    Crawl
+                  </Badge>
+                  {job.sourceName || job.sourceUrl || "Unknown source"}
+                </>
+              ) : (
+                job.categoryName
+              )}
               {" · "}
               Started {new Date(job.startedAt).toLocaleString()}
               {" · "}
@@ -183,10 +196,29 @@ export default function DiscoveryJobDetailPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      Category
+                      {job.discoveryMethod === "crawl" ? "Source" : "Category"}
                     </Label>
-                    <p className="text-sm font-medium">{job.categoryName}</p>
+                    <p className="text-sm font-medium">
+                      {job.discoveryMethod === "crawl"
+                        ? job.sourceName || job.sourceUrl || "—"
+                        : job.categoryName}
+                    </p>
                   </div>
+                  {job.discoveryMethod === "crawl" && job.sourceUrl && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">
+                        Source URL
+                      </Label>
+                      <a
+                        href={job.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-sm font-medium text-blue-600 hover:underline truncate"
+                      >
+                        {job.sourceUrl}
+                      </a>
+                    </div>
+                  )}
                   <div>
                     <Label className="text-xs text-muted-foreground">
                       Date Range

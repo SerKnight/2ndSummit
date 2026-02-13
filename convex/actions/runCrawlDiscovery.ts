@@ -5,31 +5,33 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 
 /**
- * Pipeline orchestrator — runs the full discovery pipeline:
- * 1. Search (Perplexity) → 2. Validate (OpenAI) → 3. Store with dedup
+ * Per-source crawl orchestrator — mirrors runEventDiscovery.ts:
+ * 1. Crawl source → extract events
+ * 2. Validate events (OpenAI)
+ * 3. Store with dedup
  */
 export const run = internalAction({
   args: {
     jobId: v.id("eventDiscoveryJobs"),
+    sourceId: v.id("marketSources"),
     marketId: v.id("markets"),
-    categoryId: v.id("eventCategories"),
     dateRangeStart: v.string(),
     dateRangeEnd: v.string(),
   },
   handler: async (ctx, args): Promise<void> => {
     try {
-      // Step 1: Search with Perplexity
+      // Step 1: Crawl + extract
       await ctx.runMutation(internal.eventDiscoveryJobs.updateStatus, {
         jobId: args.jobId,
         status: "searching",
       });
 
       const rawEvents = await ctx.runAction(
-        internal.actions.discoverEvents.run,
+        internal.actions.crawlSource.run,
         {
-          jobId: args.jobId,
+          sourceId: args.sourceId,
           marketId: args.marketId,
-          categoryId: args.categoryId,
+          jobId: args.jobId,
           dateRangeStart: args.dateRangeStart,
           dateRangeEnd: args.dateRangeEnd,
         }
@@ -54,10 +56,7 @@ export const run = internalAction({
         status: "validating",
       });
 
-      // Get category and market info for validation context
-      const category = await ctx.runQuery(internal.queries.getEventCategory, {
-        id: args.categoryId,
-      });
+      // Get market info for validation context
       const market = await ctx.runQuery(internal.queries.getMarket, {
         id: args.marketId,
       });
@@ -67,8 +66,8 @@ export const run = internalAction({
         {
           jobId: args.jobId,
           marketId: args.marketId,
-          categoryName: category?.name ?? "Unknown",
-          pillar: category?.pillar ?? "Discover",
+          categoryName: "General",
+          pillar: "Discover",
           events: JSON.stringify(rawEvents),
           marketName: market?.name,
           marketRegion: market?.regionDescription,
@@ -94,16 +93,17 @@ export const run = internalAction({
 
       for (const result of validationResults) {
         const r = result as any;
-        // Skip rejected events
         if (r.recommendation === "reject") continue;
 
         const event = r.correctedEvent;
         try {
-          // Map validation recommendation to validationStatus
           let validationStatus: string;
           if (r.recommendation === "accept" && r.confidence >= 0.7) {
             validationStatus = "validated";
-          } else if (r.recommendation === "needs_review" || r.confidence < 0.7) {
+          } else if (
+            r.recommendation === "needs_review" ||
+            r.confidence < 0.7
+          ) {
             validationStatus = "needs_review";
           } else {
             validationStatus = "pending";
@@ -116,8 +116,6 @@ export const run = internalAction({
               description: event.description || "",
               briefSummary: sanitize(event.briefSummary),
               marketId: args.marketId,
-              categoryId: args.categoryId,
-              pillar: category?.pillar,
               originalPayload: JSON.stringify(event),
               sourceUrl: sanitize(event.sourceUrl),
               dateRaw: sanitize(event.dateRaw),
@@ -146,6 +144,7 @@ export const run = internalAction({
                   ? r.issues.join("; ")
                   : undefined,
               discoveryJobId: args.jobId,
+              source: "crawl_extraction",
             }
           );
 
@@ -165,7 +164,6 @@ export const run = internalAction({
         eventsStored: storedCount,
       });
 
-      // Complete
       await ctx.runMutation(internal.eventDiscoveryJobs.updateStatus, {
         jobId: args.jobId,
         status: "completed",
@@ -183,7 +181,12 @@ export const run = internalAction({
 });
 
 function sanitize(val: unknown): string | undefined {
-  if (typeof val === "string" && val.trim() !== "" && val !== "null" && val !== "undefined") {
+  if (
+    typeof val === "string" &&
+    val.trim() !== "" &&
+    val !== "null" &&
+    val !== "undefined"
+  ) {
     return val;
   }
   return undefined;

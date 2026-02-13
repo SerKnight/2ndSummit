@@ -125,6 +125,25 @@ export default defineSchema({
     .index("by_discoveryJob", ["discoveryJobId"])
     .index("by_dedupHash", ["dedupHash"]),
 
+  marketSources: defineTable({
+    marketId: v.id("markets"),
+    url: v.string(),
+    name: v.optional(v.string()),
+    sourceType: v.string(), // "crawl" | "api_eventbrite" | "api_meetup"
+    contentSelector: v.optional(v.string()),
+    isActive: v.boolean(),
+    crawlFrequency: v.string(), // "daily" | "twice_weekly" | "weekly"
+    lastCrawledAt: v.optional(v.number()),
+    lastCrawlStatus: v.optional(v.string()), // "success" | "error" | "no_events"
+    lastCrawlError: v.optional(v.string()),
+    totalEventsFound: v.number(),
+    lastEventsFound: v.optional(v.number()),
+    consecutiveFailures: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_market", ["marketId"])
+    .index("by_market_active", ["marketId", "isActive"]),
+
   eventDiscoveryJobs: defineTable({
     marketId: v.id("markets"),
     categoryId: v.optional(v.id("eventCategories")),
@@ -140,6 +159,8 @@ export default defineSchema({
     triggeredBy: v.optional(v.id("users")),
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
+    discoveryMethod: v.optional(v.string()), // "perplexity" | "crawl"
+    sourceId: v.optional(v.id("marketSources")),
   })
     .index("by_market", ["marketId"])
     .index("by_status", ["status"])

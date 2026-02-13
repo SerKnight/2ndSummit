@@ -4,6 +4,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { BRAND_CONTEXT } from "../lib/brandContext";
+import { VALIDATION_DELAY_MS } from "../lib/rateLimits";
 
 interface RawEventCandidate {
   title?: string;
@@ -51,6 +52,8 @@ export const run = internalAction({
     categoryName: v.string(),
     pillar: v.string(),
     events: v.string(), // JSON-stringified array of RawEventCandidate
+    marketName: v.optional(v.string()),
+    marketRegion: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<ValidationResult[]> => {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -61,12 +64,18 @@ export const run = internalAction({
 
     for (const candidate of candidates) {
       try {
+        const marketContext = args.marketName
+          ? `\n\n## Target Market\nThis event is being validated for the **${args.marketName}** market (${args.marketRegion ?? ""}). Events should be located in or near this market area. Do NOT reject events simply because they are not in Denver — 2nd Summit operates in multiple markets. The "Location: Denver, CO" in the brand context refers to company headquarters, not the only valid event location.`
+          : "";
+
         const messages = [
           {
             role: "system",
             content: `You are validating event data for 2nd Summit, a community platform.
 
-${BRAND_CONTEXT}
+${BRAND_CONTEXT}${marketContext}
+
+Today's date is ${new Date().toISOString().split("T")[0]}. Use this as your reference for determining whether dates are in the past or future.
 
 Validate the event data and return a JSON object with:
 {
@@ -78,13 +87,14 @@ Validate the event data and return a JSON object with:
 }
 
 Check for:
-1. Date validity — are dates properly formatted and in the future?
+1. Date validity — are dates properly formatted and in the future (on or after today's date)?
 2. Location completeness — is there enough location info?
 3. Cost parsing — can the cost info be structured?
 4. URL validity — does the source URL look legitimate?
 5. Content quality — is the description meaningful and not generic?
 6. Brand alignment — does this fit 2nd Summit's audience (active adults, not seniors/elderly)?
 7. Category relevance — does the event match "${args.categoryName}" in the "${args.pillar}" pillar?
+8. Location relevance — is the event located in or near the ${args.marketName ?? "target"} market area?
 
 Apply corrections where possible (e.g., parse "Free" into costType: "free", format dates properly).
 Recommend "reject" for clearly invalid events, "needs_review" for uncertain ones.`,
@@ -179,7 +189,7 @@ ${JSON.stringify(candidate, null, 2)}`,
         });
 
         // Rate limit delay
-        await new Promise((resolve) => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, VALIDATION_DELAY_MS));
       } catch (error) {
         console.error(
           `Failed to validate event "${candidate.title}":`,
