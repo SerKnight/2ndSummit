@@ -16,12 +16,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Mountain, Menu, X, User, LogOut, Settings } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function Navbar() {
   const pathname = usePathname();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <nav className="sticky top-0 z-50 bg-gray-950 text-white">
@@ -61,7 +66,7 @@ export function Navbar() {
             </Link>
 
             <div className="ml-4 flex items-center gap-2">
-              {isLoading ? (
+              {!mounted || isLoading ? (
                 <div className="h-8 w-20" />
               ) : isAuthenticated ? (
                 <AuthenticatedMenu />
@@ -121,7 +126,7 @@ export function Navbar() {
             >
               Experiences
             </Link>
-            {!isLoading && !isAuthenticated && (
+            {mounted && !isLoading && !isAuthenticated && (
               <div className="pt-3 space-y-2">
                 <Link href="/auth" onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" className="w-full border-gray-600 text-white hover:bg-gray-800">
