@@ -7,7 +7,6 @@ import type { ApprovedEvent } from "@/lib/calendar-types";
 import {
   getEventsForDate,
   groupEventsByPillar,
-  formatDateParam,
 } from "@/lib/calendar-utils";
 import { PILLAR_STYLES } from "@/lib/pillars";
 import { EventCard } from "./EventCard";

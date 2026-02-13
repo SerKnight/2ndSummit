@@ -10,8 +10,6 @@ import {
   DAY_NAMES,
   getDaysInMonth,
   getFirstDayOfMonth,
-  getEventDate,
-  parseEventDate,
   formatDateParam,
   dateKey,
   buildEventsByDate,

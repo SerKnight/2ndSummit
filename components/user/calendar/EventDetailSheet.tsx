@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/sheet";
 import {
   MapPin,
-  Clock,
   DollarSign,
   Activity,
   Tag,
