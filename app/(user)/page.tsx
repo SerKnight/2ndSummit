@@ -122,9 +122,9 @@ function LandingPage() {
               </Link>
               <Link href="/calendar">
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="lg"
-                  className="border-gray-400 text-white hover:bg-white/10 hover:text-white text-base px-8"
+                  className="border border-white/30 !text-white hover:!bg-white/10 text-base px-8"
                 >
                   Explore Experiences
                 </Button>
