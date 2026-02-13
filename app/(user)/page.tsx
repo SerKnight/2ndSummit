@@ -2,7 +2,7 @@
 
 import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useMemo } from "react";
+import { useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,10 @@ import {
   CheckCircle2,
   Circle,
   Sparkles,
+  Volume2,
+  VolumeX,
+  Play,
+  Pause,
 } from "lucide-react";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -133,6 +137,9 @@ function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Video */}
+      <VideoSection />
 
       {/* Pillars */}
       <section className="py-20 bg-white">
@@ -292,6 +299,151 @@ function PillarCard({
       <h3 className="mt-4 text-xl font-bold text-gray-900">{title}</h3>
       <p className="mt-3 text-gray-600 leading-relaxed">{description}</p>
     </div>
+  );
+}
+
+function VideoSection() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const toggleMute = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
+    }
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    }
+  }, []);
+
+  const handleTimeUpdate = useCallback(() => {
+    if (videoRef.current && !isDragging) {
+      const pct =
+        (videoRef.current.currentTime / videoRef.current.duration) * 100;
+      setProgress(pct);
+    }
+  }, [isDragging]);
+
+  const seekTo = useCallback((clientX: number) => {
+    if (!videoRef.current || !progressRef.current) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const pct = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+    videoRef.current.currentTime = pct * videoRef.current.duration;
+    setProgress(pct * 100);
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      setIsDragging(true);
+      seekTo(e.clientX);
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [seekTo]
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (isDragging) seekTo(e.clientX);
+    },
+    [isDragging, seekTo]
+  );
+
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  return (
+    <section className="py-16 bg-white">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="relative overflow-hidden rounded-2xl shadow-xl group">
+          <video
+            ref={videoRef}
+            className="w-full cursor-pointer"
+            autoPlay
+            muted
+            loop
+            playsInline
+            onClick={togglePlay}
+            onTimeUpdate={handleTimeUpdate}
+          >
+            <source
+              src="https://2ndsummit.org/uploads/2nd_Sum_Vid_FA.mp4"
+              type="video/mp4"
+            />
+          </video>
+
+          {/* Controls overlay */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent pt-10 pb-3 px-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Progress bar */}
+            <div
+              ref={progressRef}
+              className="w-full h-1.5 bg-white/30 rounded-full cursor-pointer mb-3 group/bar"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+            >
+              <div
+                className="h-full bg-amber-400 rounded-full relative"
+                style={{ width: `${progress}%` }}
+              >
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3.5 w-3.5 rounded-full bg-white shadow opacity-0 group-hover/bar:opacity-100 transition-opacity" />
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={togglePlay}
+                className="rounded-full p-1.5 text-white hover:bg-white/20 transition-colors"
+                aria-label={isPlaying ? "Pause video" : "Play video"}
+              >
+                {isPlaying ? (
+                  <Pause className="h-5 w-5" />
+                ) : (
+                  <Play className="h-5 w-5" />
+                )}
+              </button>
+              <button
+                onClick={toggleMute}
+                className="rounded-full p-1.5 text-white hover:bg-white/20 transition-colors"
+                aria-label={isMuted ? "Unmute video" : "Mute video"}
+              >
+                {isMuted ? (
+                  <VolumeX className="h-5 w-5" />
+                ) : (
+                  <Volume2 className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Center play icon when paused */}
+          {!isPlaying && (
+            <button
+              onClick={togglePlay}
+              className="absolute inset-0 flex items-center justify-center bg-black/20"
+            >
+              <div className="rounded-full bg-black/50 p-4 backdrop-blur-sm">
+                <Play className="h-10 w-10 text-white" />
+              </div>
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   Tag,
   Sparkles,
   ScrollText,
+  Users,
   Mountain,
   ExternalLink,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/admin/categories", label: "Categories", icon: Tag },
   { href: "/admin/discovery", label: "Discovery", icon: Sparkles },
   { href: "/admin/logs", label: "LLM Logs", icon: ScrollText },
+  { href: "/admin/users", label: "Users", icon: Users },
 ];
 
 export function Sidebar() {
