@@ -642,10 +642,11 @@ export default function EditMarketPage() {
                         </div>
 
                         {(source.consecutiveFailures ?? 0) >= 3 && (
-                          <AlertTriangle
-                            className="h-4 w-4 shrink-0 text-amber-500"
-                            title={`${source.consecutiveFailures} consecutive failures`}
-                          />
+                          <span title={`${source.consecutiveFailures} consecutive failures`}>
+                            <AlertTriangle
+                              className="h-4 w-4 shrink-0 text-amber-500"
+                            />
+                          </span>
                         )}
 
                         <div className="flex items-center gap-1 shrink-0">
