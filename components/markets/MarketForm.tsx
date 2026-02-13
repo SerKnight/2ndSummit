@@ -47,12 +47,8 @@ export function MarketForm({
   );
   const [flyToTrigger, setFlyToTrigger] = useState(0);
 
-  const handleLocationSelect = (
-    lat: number,
-    lng: number,
-    _displayName?: string
-  ) => {
-    void _displayName;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleLocationSelect = (lat: number, lng: number, _display: string) => {
     setLatitude(lat);
     setLongitude(lng);
     setFlyToTrigger((t) => t + 1);
