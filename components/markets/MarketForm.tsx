@@ -50,8 +50,9 @@ export function MarketForm({
   const handleLocationSelect = (
     lat: number,
     lng: number,
-    _displayName: string
+    _displayName?: string
   ) => {
+    void _displayName;
     setLatitude(lat);
     setLongitude(lng);
     setFlyToTrigger((t) => t + 1);
