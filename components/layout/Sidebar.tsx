@@ -20,7 +20,7 @@ const navItems = [
   { href: "/admin/markets", label: "Markets", icon: MapPin },
   { href: "/admin/events", label: "Events", icon: Calendar },
   { href: "/admin/categories", label: "Categories", icon: Tag },
-  { href: "/admin/discovery", label: "Discovery", icon: Sparkles },
+  { href: "/admin/discovery", label: "Event Discovery", icon: Sparkles },
   { href: "/admin/logs", label: "LLM Logs", icon: ScrollText },
   { href: "/admin/users", label: "Users", icon: Users },
 ];

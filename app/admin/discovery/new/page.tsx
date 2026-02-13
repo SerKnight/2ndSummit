@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -25,145 +25,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/ui/toggle-group";
-import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Sparkles, Loader2, Eye, Settings2 } from "lucide-react";
+import { ArrowLeft, Sparkles, Loader2, Eye } from "lucide-react";
 import Link from "next/link";
-import { pillarColors, PILLARS } from "@/lib/pillars";
-import { applyTemplate } from "@/lib/promptVariables";
+import { pillarColors } from "@/lib/pillars";
 
-export default function NewDiscoveryRunPage() {
+export default function NewDiscoveryJobPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedMarket = searchParams.get("market") ?? "";
 
   // Data
   const markets = useQuery(api.markets.list);
-  const categories = useQuery(api.categories.list, {});
-  const templates = useQuery(api.promptTemplates.list);
-  const defaultTemplate = useQuery(api.promptTemplates.getDefault);
+  const categories = useQuery(api.eventCategories.list, {});
 
   // Form state
-  const [selectedMarket, setSelectedMarket] = useState<string>("");
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(
-    new Set()
+  const [selectedMarket, setSelectedMarket] = useState<string>(preselectedMarket);
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [dateRangeStart, setDateRangeStart] = useState(
+    new Date().toISOString().split("T")[0]
   );
-  const [categoriesInitialized, setCategoriesInitialized] = useState(false);
-  const [timeRangeDays, setTimeRangeDays] = useState("90");
-  const [radiusMiles, setRadiusMiles] = useState<string>("");
-  const [batchSize, setBatchSize] = useState("4");
-  const [temperature, setTemperature] = useState("0.1");
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
-  const [searchRecencyFilter, setSearchRecencyFilter] = useState("month");
+  const [dateRangeEnd, setDateRangeEnd] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 90);
+    return d.toISOString().split("T")[0];
+  });
   const [showPreview, setShowPreview] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
 
-  const createRun = useMutation(api.discoveryRuns.create);
-  const seedTemplates = useMutation(api.promptTemplates.seed);
+  const createJob = useMutation(api.eventDiscoveryJobs.create);
 
-  // Initialize categories when loaded
-  if (categories && !categoriesInitialized) {
-    setSelectedCategoryIds(new Set(categories.map((c) => c._id)));
-    setCategoriesInitialized(true);
-  }
-
-  // Initialize template when loaded
-  if (defaultTemplate && !selectedTemplateId) {
-    setSelectedTemplateId(defaultTemplate._id);
-  }
-
-  // Resolve selected market
+  // Resolve selected market & category
   const market = useMemo(
     () => markets?.find((m) => m._id === selectedMarket),
     [markets, selectedMarket]
   );
 
-  // When market changes, update radius default
-  const handleMarketChange = (id: string) => {
-    setSelectedMarket(id);
-    const m = markets?.find((mk) => mk._id === id);
-    if (m) setRadiusMiles(String(m.radiusMiles));
-  };
-
-  // Resolve selected template
-  const selectedTemplate = useMemo(
-    () => templates?.find((t) => t._id === selectedTemplateId),
-    [templates, selectedTemplateId]
+  const category = useMemo(
+    () => categories?.find((c) => c._id === selectedCategory),
+    [categories, selectedCategory]
   );
 
-  // Category grouping
-  const categoryGroups = useMemo(() => {
-    if (!categories) return {};
-    const groups: Record<string, typeof categories> = {};
-    for (const pillar of PILLARS) {
-      groups[pillar] = categories.filter((c) => c.pillar === pillar);
-    }
-    return groups;
-  }, [categories]);
-
-  // Toggle category
-  const toggleCategory = (id: string) => {
-    setSelectedCategoryIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  // Toggle all in a pillar
-  const togglePillar = (pillar: string) => {
-    const pillarCats = categoryGroups[pillar] ?? [];
-    const allSelected = pillarCats.every((c) => selectedCategoryIds.has(c._id));
-    setSelectedCategoryIds((prev) => {
-      const next = new Set(prev);
-      for (const c of pillarCats) {
-        if (allSelected) next.delete(c._id);
-        else next.add(c._id);
-      }
-      return next;
-    });
-  };
-
-  // Toggle all
-  const toggleAll = () => {
-    if (!categories) return;
-    const allSelected = categories.every((c) => selectedCategoryIds.has(c._id));
-    if (allSelected) {
-      setSelectedCategoryIds(new Set());
-    } else {
-      setSelectedCategoryIds(new Set(categories.map((c) => c._id)));
-    }
-  };
-
-  // Generate preview
-  const previewPrompt = useMemo(() => {
-    if (!selectedTemplate || !market) return null;
-    const sampleCategories = categories
-      ?.filter((c) => selectedCategoryIds.has(c._id))
-      ?.slice(0, Number(batchSize))
-      ?.map((c) => c.name)
-      .join(", ");
-    return applyTemplate(selectedTemplate.userPromptTemplate, {
-      categoryNames: sampleCategories || "Walking Groups, Hiking",
-      radiusMiles: radiusMiles || String(market.radiusMiles),
-      marketName: market.name,
-      regionDescription: market.regionDescription,
-      latitude: String(market.latitude),
-      longitude: String(market.longitude),
-      timeRange: `next ${timeRangeDays} days`,
-      todaysDate: new Date().toISOString().split("T")[0],
-    });
-  }, [
-    selectedTemplate,
-    market,
-    categories,
-    selectedCategoryIds,
-    batchSize,
-    radiusMiles,
-    timeRangeDays,
-  ]);
+  // Active categories only
+  const activeCategories = useMemo(
+    () => categories?.filter((c) => c.isActive) ?? [],
+    [categories]
+  );
 
   // Run discovery
   const handleRun = async () => {
@@ -171,48 +77,27 @@ export default function NewDiscoveryRunPage() {
       toast.error("Please select a market");
       return;
     }
-    if (selectedCategoryIds.size === 0) {
-      toast.error("Please select at least one category");
+    if (!selectedCategory) {
+      toast.error("Please select a category");
       return;
     }
 
     setIsRunning(true);
     try {
-      const runId = await createRun({
+      const jobId = await createJob({
         marketId: selectedMarket as Id<"markets">,
-        categoryIds: Array.from(selectedCategoryIds) as Id<"categories">[],
-        radiusMiles: Number(radiusMiles) || undefined,
-        timeRangeDays: Number(timeRangeDays),
-        batchSize: Number(batchSize),
-        temperature: Number(temperature),
-        searchRecencyFilter,
-        model: "sonar",
-        promptTemplateId: selectedTemplateId
-          ? (selectedTemplateId as Id<"promptTemplates">)
-          : undefined,
+        categoryId: selectedCategory as Id<"eventCategories">,
+        dateRangeStart,
+        dateRangeEnd,
       });
-      toast.success("Discovery run started");
-      router.push(`/admin/discovery/runs/${runId}`);
+      toast.success("Event discovery job started");
+      router.push(`/admin/discovery/runs/${jobId}`);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to start discovery"
       );
     } finally {
       setIsRunning(false);
-    }
-  };
-
-  // Seed templates if none exist
-  const handleSeedTemplates = async () => {
-    try {
-      const result = await seedTemplates();
-      if (result.seeded) {
-        toast.success("Default prompt template created");
-      } else {
-        toast.info(result.message);
-      }
-    } catch {
-      toast.error("Failed to seed templates");
     }
   };
 
@@ -227,7 +112,7 @@ export default function NewDiscoveryRunPage() {
         </Link>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            New Discovery Run
+            New Event Discovery Job
           </h1>
           <p className="text-muted-foreground">
             Configure and launch an AI-powered event search
@@ -244,18 +129,24 @@ export default function NewDiscoveryRunPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Select value={selectedMarket} onValueChange={handleMarketChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a market" />
-            </SelectTrigger>
-            <SelectContent>
-              {markets?.map((m) => (
-                <SelectItem key={m._id} value={m._id}>
-                  {m.name} — {m.regionDescription}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!markets ? (
+            <Skeleton className="h-10 w-full" />
+          ) : (
+            <Select value={selectedMarket} onValueChange={setSelectedMarket}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a market" />
+              </SelectTrigger>
+              <SelectContent>
+                {markets
+                  .filter((m) => m.isActive)
+                  .map((m) => (
+                    <SelectItem key={m._id} value={m._id}>
+                      {m.name} — {m.regionDescription}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          )}
           {market && (
             <div className="grid grid-cols-3 gap-4 rounded-md bg-muted/50 p-3 text-sm">
               <div>
@@ -263,344 +154,175 @@ export default function NewDiscoveryRunPage() {
                 {market.regionDescription}
               </div>
               <div>
-                <span className="text-muted-foreground">Default Radius: </span>
+                <span className="text-muted-foreground">Radius: </span>
                 {market.radiusMiles} miles
               </div>
               <div>
-                <span className="text-muted-foreground">Coordinates: </span>
-                {market.latitude.toFixed(4)}, {market.longitude.toFixed(4)}
+                <span className="text-muted-foreground">Sources: </span>
+                {market.searchSources?.length ?? 0} configured
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Categories */}
+      {/* Category Selection */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Categories</CardTitle>
-              <CardDescription>
-                Select which event categories to search for
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">
-                {selectedCategoryIds.size} of {categories?.length ?? 0} selected
-              </span>
-              <Button variant="outline" size="sm" onClick={toggleAll}>
-                {categories &&
-                categories.every((c) => selectedCategoryIds.has(c._id))
-                  ? "Deselect All"
-                  : "Select All"}
-              </Button>
-            </div>
-          </div>
+          <CardTitle>Category</CardTitle>
+          <CardDescription>
+            Select a single event category to search for (one per job for
+            quality)
+          </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {!categories ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-20 w-full" />
-              ))}
-            </div>
+            <Skeleton className="h-10 w-full" />
           ) : (
-            <div className="space-y-4">
-              {PILLARS.map((pillar) => {
-                const pillarCats = categoryGroups[pillar] ?? [];
-                const allSelected = pillarCats.every((c) =>
-                  selectedCategoryIds.has(c._id)
-                );
-                const someSelected = pillarCats.some((c) =>
-                  selectedCategoryIds.has(c._id)
-                );
-                return (
-                  <div key={pillar}>
-                    <div className="mb-2 flex items-center gap-2">
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {activeCategories.map((c) => (
+                  <SelectItem key={c._id} value={c._id}>
+                    <span className="flex items-center gap-2">
+                      {c.name}
                       <Badge
                         variant="outline"
-                        className={pillarColors[pillar] || ""}
+                        className={`ml-1 text-xs ${pillarColors[c.pillar] || ""}`}
                       >
-                        {pillar}
+                        {c.pillar}
                       </Badge>
-                      <button
-                        onClick={() => togglePillar(pillar)}
-                        className="text-xs text-muted-foreground hover:text-foreground"
-                      >
-                        {allSelected ? "Deselect all" : "Select all"}
-                      </button>
-                      {someSelected && !allSelected && (
-                        <span className="text-xs text-muted-foreground">
-                          ({pillarCats.filter((c) => selectedCategoryIds.has(c._id)).length}/{pillarCats.length})
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {pillarCats.map((cat) => {
-                        const selected = selectedCategoryIds.has(cat._id);
-                        return (
-                          <button
-                            key={cat._id}
-                            onClick={() => toggleCategory(cat._id)}
-                            className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                              selected
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border text-muted-foreground hover:border-primary/50"
-                            }`}
-                          >
-                            {cat.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {pillar !== "Connect" && <Separator className="mt-4" />}
-                  </div>
-                );
-              })}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {category && (
+            <div className="space-y-2 rounded-md bg-muted/50 p-3 text-sm">
+              {category.description && (
+                <p className="text-muted-foreground">{category.description}</p>
+              )}
+              {category.searchSubPrompt ? (
+                <div>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Search Sub-Prompt:
+                  </span>
+                  <p className="mt-0.5 text-xs">{category.searchSubPrompt}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-yellow-600">
+                  No search sub-prompt generated yet — the system will use a
+                  generic prompt.
+                </p>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Search Parameters */}
+      {/* Date Range */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings2 className="h-4 w-4" />
-            Search Parameters
-          </CardTitle>
+          <CardTitle>Date Range</CardTitle>
           <CardDescription>
-            Fine-tune how the AI searches for events
+            The time window to search for events
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-6 lg:grid-cols-4">
-            {/* Time Range */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Time Range</Label>
-              <ToggleGroup
-                type="single"
-                value={timeRangeDays}
-                onValueChange={(val) => val && setTimeRangeDays(val)}
-                className="justify-start"
-              >
-                <ToggleGroupItem value="30" className="text-xs">
-                  30 days
-                </ToggleGroupItem>
-                <ToggleGroupItem value="60" className="text-xs">
-                  60 days
-                </ToggleGroupItem>
-                <ToggleGroupItem value="90" className="text-xs">
-                  90 days
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-
-            {/* Radius */}
-            <div className="space-y-2">
-              <Label>
-                Radius (miles)
-                {market && (
-                  <span className="ml-1 text-xs text-muted-foreground">
-                    default: {market.radiusMiles}
-                  </span>
-                )}
-              </Label>
+              <Label>Start Date</Label>
               <Input
-                type="number"
-                value={radiusMiles}
-                onChange={(e) => setRadiusMiles(e.target.value)}
-                placeholder={market ? String(market.radiusMiles) : "25"}
-                min={1}
-                max={200}
+                type="date"
+                value={dateRangeStart}
+                onChange={(e) => setDateRangeStart(e.target.value)}
               />
             </div>
-
-            {/* Batch Size */}
             <div className="space-y-2">
-              <Label>Batch Size</Label>
-              <ToggleGroup
-                type="single"
-                value={batchSize}
-                onValueChange={(val) => val && setBatchSize(val)}
-                className="justify-start"
-              >
-                <ToggleGroupItem value="2" className="text-xs">
-                  2
-                </ToggleGroupItem>
-                <ToggleGroupItem value="3" className="text-xs">
-                  3
-                </ToggleGroupItem>
-                <ToggleGroupItem value="4" className="text-xs">
-                  4
-                </ToggleGroupItem>
-                <ToggleGroupItem value="5" className="text-xs">
-                  5
-                </ToggleGroupItem>
-              </ToggleGroup>
-              <p className="text-xs text-muted-foreground">
-                Categories per API call
-              </p>
-            </div>
-
-            {/* Temperature */}
-            <div className="space-y-2">
-              <Label>Temperature</Label>
+              <Label>End Date</Label>
               <Input
-                type="number"
-                value={temperature}
-                onChange={(e) => setTemperature(e.target.value)}
-                min={0}
-                max={1}
-                step={0.1}
+                type="date"
+                value={dateRangeEnd}
+                onChange={(e) => setDateRangeEnd(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">
-                Lower = more focused, higher = more creative
-              </p>
             </div>
-          </div>
-
-          <Separator className="my-4" />
-
-          <div className="space-y-2">
-            <Label>Search Recency</Label>
-            <ToggleGroup
-              type="single"
-              value={searchRecencyFilter}
-              onValueChange={(val) => val && setSearchRecencyFilter(val)}
-              className="justify-start"
-            >
-              <ToggleGroupItem value="day" className="text-xs">
-                Day
-              </ToggleGroupItem>
-              <ToggleGroupItem value="week" className="text-xs">
-                Week
-              </ToggleGroupItem>
-              <ToggleGroupItem value="month" className="text-xs">
-                Month
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <p className="text-xs text-muted-foreground">
-              How recent the web sources should be
-            </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Prompt Template */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Prompt Template</CardTitle>
-              <CardDescription>
-                The AI instructions that guide the event search
-              </CardDescription>
-            </div>
-            <Link href="/admin/discovery/templates">
-              <Button variant="outline" size="sm">
-                Manage Templates
-              </Button>
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {templates && templates.length === 0 ? (
-            <div className="rounded-md border border-dashed p-6 text-center">
-              <p className="mb-3 text-sm text-muted-foreground">
-                No prompt templates yet. Create a default template to get
-                started.
-              </p>
-              <Button onClick={handleSeedTemplates}>
-                Create Default Template
-              </Button>
-            </div>
-          ) : (
-            <>
-              <Select
-                value={selectedTemplateId}
-                onValueChange={setSelectedTemplateId}
+      {/* Prompt Preview */}
+      {market && category && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Prompt Preview</CardTitle>
+                <CardDescription>
+                  The assembled prompt that will be sent to Perplexity
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPreview(!showPreview)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a prompt template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates?.map((t) => (
-                    <SelectItem key={t._id} value={t._id}>
-                      {t.name}
-                      {t.isDefault && " (Default)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {selectedTemplate && (
-                <div className="space-y-3">
-                  {selectedTemplate.description && (
-                    <p className="text-sm text-muted-foreground">
-                      {selectedTemplate.description}
-                    </p>
-                  )}
-
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      System Prompt
-                    </Label>
-                    <pre className="mt-1 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
-                      {selectedTemplate.systemPrompt}
-                    </pre>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs text-muted-foreground">
-                        User Prompt Template
-                      </Label>
-                      {market && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowPreview(!showPreview)}
-                          className="h-6 text-xs"
-                        >
-                          <Eye className="mr-1 h-3 w-3" />
-                          {showPreview ? "Show Template" : "Preview with Values"}
-                        </Button>
-                      )}
-                    </div>
-                    <pre className="mt-1 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
-                      {showPreview && previewPrompt
-                        ? previewPrompt
-                        : selectedTemplate.userPromptTemplate.replace(
-                            /\{\{(\w+)\}\}/g,
-                            (match) =>
-                              `\u00AB${match}\u00BB`
-                          )}
-                    </pre>
-                  </div>
+                <Eye className="mr-2 h-4 w-4" />
+                {showPreview ? "Hide" : "Show"} Preview
+              </Button>
+            </div>
+          </CardHeader>
+          {showPreview && (
+            <CardContent>
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Market Context
+                  </Label>
+                  <pre className="mt-1 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+                    {market.name} — {market.regionDescription}
+                    {market.sourcePromptContext &&
+                      `\n\nSource Context:\n${market.sourcePromptContext}`}
+                    {market.searchSources && market.searchSources.length > 0 &&
+                      `\n\nKnown Sources:\n${market.searchSources.join("\n")}`}
+                  </pre>
                 </div>
-              )}
-            </>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Category Sub-Prompt
+                  </Label>
+                  <pre className="mt-1 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+                    {category.searchSubPrompt || "(No sub-prompt — generic search will be used)"}
+                  </pre>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Date Window
+                  </Label>
+                  <pre className="mt-1 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+                    {dateRangeStart} to {dateRangeEnd}
+                  </pre>
+                </div>
+              </div>
+            </CardContent>
           )}
-        </CardContent>
-      </Card>
+        </Card>
+      )}
 
       {/* Action Bar */}
       <div className="flex items-center justify-between rounded-lg border bg-card p-4">
         <div className="text-sm text-muted-foreground">
-          {selectedMarket && selectedCategoryIds.size > 0 ? (
+          {selectedMarket && selectedCategory ? (
             <>
-              Ready to search{" "}
-              <strong>{selectedCategoryIds.size} categories</strong> in{" "}
-              <strong>{market?.name}</strong> over{" "}
-              <strong>{timeRangeDays} days</strong>
-              {" · "}
-              {Math.ceil(selectedCategoryIds.size / Number(batchSize))} API
-              calls
+              Ready to search <strong>{category?.name}</strong> events in{" "}
+              <strong>{market?.name}</strong> from{" "}
+              <strong>{dateRangeStart}</strong> to{" "}
+              <strong>{dateRangeEnd}</strong>
             </>
           ) : (
-            "Select a market and categories to begin"
+            "Select a market and category to begin"
           )}
         </div>
         <div className="flex gap-3">
@@ -609,16 +331,14 @@ export default function NewDiscoveryRunPage() {
           </Link>
           <Button
             onClick={handleRun}
-            disabled={
-              !selectedMarket || selectedCategoryIds.size === 0 || isRunning
-            }
+            disabled={!selectedMarket || !selectedCategory || isRunning}
           >
             {isRunning ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Sparkles className="mr-2 h-4 w-4" />
             )}
-            {isRunning ? "Starting..." : "Run Discovery"}
+            {isRunning ? "Starting..." : "Run Event Discovery"}
           </Button>
         </div>
       </div>

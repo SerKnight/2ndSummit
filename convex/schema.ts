@@ -25,18 +25,25 @@ export default defineSchema({
     longitude: v.number(),
     radiusMiles: v.number(),
     zipCodes: v.optional(v.array(v.string())),
+    zipCode: v.optional(v.string()),
+    searchSources: v.optional(v.array(v.string())),
+    sourcePromptContext: v.optional(v.string()),
     isActive: v.boolean(),
     createdBy: v.id("users"),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   }).index("by_active", ["isActive"]),
 
-  categories: defineTable({
+  eventCategories: defineTable({
     name: v.string(),
     pillar: v.string(), // "Move" | "Discover" | "Connect"
     description: v.optional(v.string()),
+    searchSubPrompt: v.optional(v.string()),
+    exclusionRules: v.optional(v.string()),
     isActive: v.boolean(),
     createdBy: v.id("users"),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   })
     .index("by_pillar", ["pillar"])
     .index("by_active", ["isActive"]),
@@ -44,98 +51,117 @@ export default defineSchema({
   events: defineTable({
     title: v.string(),
     description: v.string(),
+    briefSummary: v.optional(v.string()),
     source: v.string(), // "perplexity_discovery" | "manual"
     sourceUrl: v.optional(v.string()),
+    sourceDomain: v.optional(v.string()),
+    sourceExtractedAt: v.optional(v.number()),
     marketId: v.id("markets"),
-    categoryId: v.optional(v.id("categories")),
+    categoryId: v.optional(v.id("eventCategories")),
     pillar: v.optional(v.string()), // "Move" | "Discover" | "Connect"
-    status: v.string(), // "raw" | "classified" | "approved" | "rejected" | "archived"
-    rawData: v.optional(v.string()),
-    date: v.optional(v.string()),
-    startTime: v.optional(v.string()),
-    endTime: v.optional(v.string()),
+
+    // Structured dates
+    dateRaw: v.optional(v.string()),
+    dateStart: v.optional(v.string()),
+    dateEnd: v.optional(v.string()),
+    timeStart: v.optional(v.string()),
+    timeEnd: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+
+    // Recurring
+    isRecurring: v.optional(v.boolean()),
+    recurrencePattern: v.optional(v.string()),
+
+    // Location
     locationName: v.optional(v.string()),
     locationAddress: v.optional(v.string()),
+    locationCity: v.optional(v.string()),
+    locationState: v.optional(v.string()),
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
-    price: v.optional(v.string()),
+    isVirtual: v.optional(v.boolean()),
+    virtualUrl: v.optional(v.string()),
+
+    // Cost
+    costRaw: v.optional(v.string()),
+    costType: v.optional(v.string()), // "free" | "paid" | "donation" | "varies"
+    costMin: v.optional(v.number()),
+    costMax: v.optional(v.number()),
+
+    // Classification / legacy
+    rawData: v.optional(v.string()),
+    originalPayload: v.optional(v.string()),
     difficultyLevel: v.optional(v.string()), // "Easy" | "Moderate" | "Challenging"
     ageAppropriate: v.optional(v.boolean()),
     tags: v.array(v.string()),
     classificationConfidence: v.optional(v.number()),
     classificationNotes: v.optional(v.string()),
-    discoveredAt: v.number(),
-    lastUpdatedAt: v.number(),
+
+    // Validation
+    validationStatus: v.string(), // "pending" | "validated" | "rejected" | "needs_review"
+    validationConfidence: v.optional(v.number()),
+    validationNotes: v.optional(v.string()),
+
+    // Admin review
+    adminReviewed: v.optional(v.boolean()),
+    adminNotes: v.optional(v.string()),
     approvedBy: v.optional(v.id("users")),
     approvedAt: v.optional(v.number()),
-    discoveryRunId: v.optional(v.id("discoveryRuns")),
+
+    // Dedup
+    dedupHash: v.optional(v.string()),
+    isDuplicate: v.optional(v.boolean()),
+
+    // Timestamps
+    discoveredAt: v.number(),
+    lastUpdatedAt: v.number(),
+    discoveryJobId: v.optional(v.id("eventDiscoveryJobs")),
   })
     .index("by_market", ["marketId"])
-    .index("by_status", ["status"])
-    .index("by_market_status", ["marketId", "status"])
+    .index("by_validationStatus", ["validationStatus"])
+    .index("by_market_validationStatus", ["marketId", "validationStatus"])
     .index("by_category", ["categoryId"])
     .index("by_pillar", ["pillar"])
-    .index("by_discoveryRun", ["discoveryRunId"]),
+    .index("by_discoveryJob", ["discoveryJobId"])
+    .index("by_dedupHash", ["dedupHash"]),
 
-  discoveryRuns: defineTable({
+  eventDiscoveryJobs: defineTable({
     marketId: v.id("markets"),
-    status: v.string(), // "pending" | "running" | "completed" | "failed"
-    categoriesSearched: v.array(v.string()),
+    categoryId: v.optional(v.id("eventCategories")),
+    status: v.string(), // "pending" | "searching" | "validating" | "storing" | "completed" | "failed"
+    dateRangeStart: v.optional(v.string()),
+    dateRangeEnd: v.optional(v.string()),
     eventsFound: v.number(),
+    eventsValidated: v.optional(v.number()),
+    eventsStored: v.optional(v.number()),
+    promptUsed: v.optional(v.string()),
+    rawResponse: v.optional(v.string()),
+    errorMessage: v.optional(v.string()),
+    triggeredBy: v.optional(v.id("users")),
     startedAt: v.number(),
     completedAt: v.optional(v.number()),
-    errorMessage: v.optional(v.string()),
-    rawResponses: v.optional(v.array(v.string())),
-    // Run configuration snapshot
-    config: v.optional(v.object({
-      categoryIds: v.array(v.id("categories")),
-      radiusMiles: v.number(),
-      timeRangeDays: v.number(),
-      batchSize: v.number(),
-      temperature: v.number(),
-      searchRecencyFilter: v.string(),
-      model: v.string(),
-      promptTemplateId: v.optional(v.id("promptTemplates")),
-      systemPromptUsed: v.string(),
-      userPromptTemplateUsed: v.string(),
-    })),
-    createdBy: v.optional(v.id("users")),
   })
     .index("by_market", ["marketId"])
     .index("by_status", ["status"])
     .index("by_startedAt", ["startedAt"]),
 
-  promptTemplates: defineTable({
-    name: v.string(),
-    description: v.optional(v.string()),
-    systemPrompt: v.string(),
-    userPromptTemplate: v.string(),
-    isDefault: v.boolean(),
-    isActive: v.boolean(),
-    createdBy: v.id("users"),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_active", ["isActive"])
-    .index("by_default", ["isDefault"]),
-
   llmLogs: defineTable({
     provider: v.string(), // "perplexity" | "openai"
-    model: v.string(), // "sonar" | "gpt-4o-mini"
-    action: v.string(), // "discovery" | "classification"
-    prompt: v.string(), // Full prompt sent (system + user messages as JSON)
-    response: v.string(), // Full raw response body
+    model: v.string(),
+    action: v.string(), // "discovery" | "validation" | "category_prompt" | "market_sources"
+    prompt: v.string(),
+    response: v.string(),
     durationMs: v.number(),
     tokensUsed: v.optional(v.number()),
     status: v.string(), // "success" | "error"
     errorMessage: v.optional(v.string()),
     marketId: v.optional(v.id("markets")),
-    discoveryRunId: v.optional(v.id("discoveryRuns")),
+    discoveryJobId: v.optional(v.id("eventDiscoveryJobs")),
     eventId: v.optional(v.id("events")),
     createdAt: v.number(),
   })
     .index("by_provider", ["provider"])
     .index("by_action", ["action"])
     .index("by_createdAt", ["createdAt"])
-    .index("by_discoveryRun", ["discoveryRunId"]),
+    .index("by_discoveryJob", ["discoveryJobId"]),
 });

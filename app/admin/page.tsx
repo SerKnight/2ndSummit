@@ -19,10 +19,10 @@ import { Button } from "@/components/ui/button";
 export default function DashboardPage() {
   const markets = useQuery(api.markets.list);
   const eventCounts = useQuery(api.events.getCountsByStatus, {});
-  const categories = useQuery(api.categories.list, {});
-  const discoveryRuns = useQuery(api.discoveryRuns.list, {});
+  const categories = useQuery(api.eventCategories.list, {});
+  const discoveryJobs = useQuery(api.eventDiscoveryJobs.list, {});
 
-  const recentRuns = discoveryRuns?.slice(0, 5);
+  const recentJobs = discoveryJobs?.slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -80,15 +80,15 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Discovery Runs
+              Event Discovery Jobs
             </CardTitle>
             <Sparkles className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {discoveryRuns === undefined ? (
+            {discoveryJobs === undefined ? (
               <Skeleton className="h-8 w-16" />
             ) : (
-              <div className="text-2xl font-bold">{discoveryRuns.length}</div>
+              <div className="text-2xl font-bold">{discoveryJobs.length}</div>
             )}
           </CardContent>
         </Card>
@@ -141,46 +141,48 @@ export default function DashboardPage() {
           <Link href="/admin/discovery">
             <Button>
               <Sparkles className="mr-2 h-4 w-4" />
-              Run Discovery
+              Run Event Discovery
             </Button>
           </Link>
         </CardContent>
       </Card>
 
-      {/* Recent Discovery Runs */}
-      {recentRuns && recentRuns.length > 0 && (
+      {/* Recent Discovery Jobs */}
+      {recentJobs && recentJobs.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Recent Discovery Runs</CardTitle>
+            <CardTitle>Recent Discovery Jobs</CardTitle>
             <CardDescription>Latest event discovery activity</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recentRuns.map((run) => (
+              {recentJobs.map((job) => (
                 <div
-                  key={run._id}
+                  key={job._id}
                   className="flex items-center justify-between rounded-md border p-3"
                 >
                   <div>
-                    <p className="font-medium">{run.marketName}</p>
+                    <p className="font-medium">{job.marketName}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Date(run.startedAt).toLocaleDateString()} &middot;{" "}
-                      {run.eventsFound} events found
+                      {new Date(job.startedAt).toLocaleDateString()} &middot;{" "}
+                      {job.eventsFound} events found
                     </p>
                   </div>
                   <Badge
                     variant="outline"
                     className={
-                      run.status === "completed"
+                      job.status === "completed"
                         ? "bg-green-100 text-green-800"
-                        : run.status === "running"
+                        : job.status === "searching" ||
+                            job.status === "validating" ||
+                            job.status === "storing"
                           ? "bg-blue-100 text-blue-800"
-                          : run.status === "failed"
+                          : job.status === "failed"
                             ? "bg-red-100 text-red-800"
                             : "bg-yellow-100 text-yellow-800"
                     }
                   >
-                    {run.status}
+                    {job.status}
                   </Badge>
                 </div>
               ))}

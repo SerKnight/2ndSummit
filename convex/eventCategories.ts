@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const list = query({
@@ -10,11 +11,11 @@ export const list = query({
     let categories;
     if (args.pillar) {
       categories = await ctx.db
-        .query("categories")
+        .query("eventCategories")
         .withIndex("by_pillar", (q) => q.eq("pillar", args.pillar!))
         .collect();
     } else {
-      categories = await ctx.db.query("categories").collect();
+      categories = await ctx.db.query("eventCategories").collect();
     }
     // Attach event counts
     return Promise.all(
@@ -30,7 +31,7 @@ export const list = query({
 });
 
 export const get = query({
-  args: { id: v.id("categories") },
+  args: { id: v.id("eventCategories") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
   },
@@ -41,26 +42,47 @@ export const create = mutation({
     name: v.string(),
     pillar: v.string(),
     description: v.optional(v.string()),
+    searchSubPrompt: v.optional(v.string()),
+    exclusionRules: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
 
-    return await ctx.db.insert("categories", {
-      ...args,
+    const now = Date.now();
+    const id = await ctx.db.insert("eventCategories", {
+      name: args.name,
+      pillar: args.pillar,
+      description: args.description,
+      searchSubPrompt: args.searchSubPrompt,
+      exclusionRules: args.exclusionRules,
       isActive: true,
       createdBy: userId,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     });
+
+    // Schedule prompt generation if no searchSubPrompt was provided
+    if (!args.searchSubPrompt) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.actions.generateCategoryPrompt.run,
+        { categoryId: id }
+      );
+    }
+
+    return id;
   },
 });
 
 export const update = mutation({
   args: {
-    id: v.id("categories"),
+    id: v.id("eventCategories"),
     name: v.optional(v.string()),
     pillar: v.optional(v.string()),
     description: v.optional(v.string()),
+    searchSubPrompt: v.optional(v.string()),
+    exclusionRules: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -71,16 +93,46 @@ export const update = mutation({
     const cleanUpdates = Object.fromEntries(
       Object.entries(updates).filter(([, v]) => v !== undefined)
     );
-    await ctx.db.patch(id, cleanUpdates);
+    await ctx.db.patch(id, { ...cleanUpdates, updatedAt: Date.now() });
   },
 });
 
 export const remove = mutation({
-  args: { id: v.id("categories") },
+  args: { id: v.id("eventCategories") },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
     await ctx.db.delete(args.id);
+  },
+});
+
+export const regeneratePrompt = mutation({
+  args: { id: v.id("eventCategories") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    await ctx.scheduler.runAfter(
+      0,
+      internal.actions.generateCategoryPrompt.run,
+      { categoryId: args.id }
+    );
+
+    return { scheduled: true };
+  },
+});
+
+// Internal mutation for actions to update searchSubPrompt
+export const updateSearchSubPrompt = internalMutation({
+  args: {
+    id: v.id("eventCategories"),
+    searchSubPrompt: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      searchSubPrompt: args.searchSubPrompt,
+      updatedAt: Date.now(),
+    });
   },
 });
 
@@ -117,21 +169,38 @@ export const seed = mutation({
     if (!userId) throw new Error("Not authenticated");
 
     // Check if categories already exist (idempotent)
-    const existing = await ctx.db.query("categories").collect();
+    const existing = await ctx.db.query("eventCategories").collect();
     if (existing.length > 0) {
       return { seeded: false, message: "Categories already exist" };
     }
 
+    const now = Date.now();
+    const categoryIds: string[] = [];
+
     for (const cat of DEFAULT_CATEGORIES) {
-      await ctx.db.insert("categories", {
+      const id = await ctx.db.insert("eventCategories", {
         name: cat.name,
         pillar: cat.pillar,
         isActive: true,
         createdBy: userId,
-        createdAt: Date.now(),
+        createdAt: now,
+        updatedAt: now,
       });
+      categoryIds.push(id);
     }
 
-    return { seeded: true, message: `Seeded ${DEFAULT_CATEGORIES.length} categories` };
+    // Schedule prompt generation for each category
+    for (const id of categoryIds) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.actions.generateCategoryPrompt.run,
+        { categoryId: id as any }
+      );
+    }
+
+    return {
+      seeded: true,
+      message: `Seeded ${DEFAULT_CATEGORIES.length} categories — prompt generation scheduled`,
+    };
   },
 });

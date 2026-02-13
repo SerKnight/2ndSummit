@@ -118,7 +118,9 @@ export default function LogsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Actions</SelectItem>
                   <SelectItem value="discovery">Discovery</SelectItem>
-                  <SelectItem value="classification">Classification</SelectItem>
+                  <SelectItem value="validation">Validation</SelectItem>
+                  <SelectItem value="category_prompt_generation">Category Prompt</SelectItem>
+                  <SelectItem value="market_source_generation">Market Sources</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -146,7 +148,7 @@ export default function LogsPage() {
             </div>
           ) : logs.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">
-              No LLM logs yet. Run a discovery or classification to see API
+              No LLM logs yet. Run an event discovery job to see API
               calls logged here.
             </p>
           ) : (
@@ -291,13 +293,13 @@ export default function LogsPage() {
                     </p>
                   </div>
                 )}
-                {selectedLog.discoveryRunId && (
+                {selectedLog.discoveryJobId && (
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      Discovery Run ID
+                      Discovery Job ID
                     </Label>
                     <p className="break-all font-mono text-xs">
-                      {selectedLog.discoveryRunId}
+                      {selectedLog.discoveryJobId}
                     </p>
                   </div>
                 )}

@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   title: "2nd Summit",
   description: "Community experiences for active adults 60+",
   icons: {
-    icon: "/convex.svg",
+    icon: "/favicon.svg",
   },
 };
 

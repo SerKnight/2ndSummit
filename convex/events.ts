@@ -1,22 +1,25 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { generateDedupHash, fuzzyTitleSimilarity } from "./lib/dedup";
 
 export const list = query({
   args: {
     marketId: v.optional(v.id("markets")),
-    status: v.optional(v.string()),
+    validationStatus: v.optional(v.string()),
     pillar: v.optional(v.string()),
-    categoryId: v.optional(v.id("categories")),
+    categoryId: v.optional(v.id("eventCategories")),
   },
   handler: async (ctx, args) => {
     let events;
 
-    if (args.marketId && args.status) {
+    if (args.marketId && args.validationStatus) {
       events = await ctx.db
         .query("events")
-        .withIndex("by_market_status", (q) =>
-          q.eq("marketId", args.marketId!).eq("status", args.status!)
+        .withIndex("by_market_validationStatus", (q) =>
+          q
+            .eq("marketId", args.marketId!)
+            .eq("validationStatus", args.validationStatus!)
         )
         .collect();
     } else if (args.marketId) {
@@ -24,10 +27,12 @@ export const list = query({
         .query("events")
         .withIndex("by_market", (q) => q.eq("marketId", args.marketId!))
         .collect();
-    } else if (args.status) {
+    } else if (args.validationStatus) {
       events = await ctx.db
         .query("events")
-        .withIndex("by_status", (q) => q.eq("status", args.status!))
+        .withIndex("by_validationStatus", (q) =>
+          q.eq("validationStatus", args.validationStatus!)
+        )
         .collect();
     } else if (args.pillar) {
       events = await ctx.db
@@ -43,11 +48,11 @@ export const list = query({
       events = await ctx.db.query("events").collect();
     }
 
-    // Apply additional client-side filters for combinations not covered by indexes
+    // Apply additional filters for combinations not covered by indexes
     if (args.pillar && args.marketId) {
       events = events.filter((e) => e.pillar === args.pillar);
     }
-    if (args.categoryId && (args.marketId || args.status)) {
+    if (args.categoryId && (args.marketId || args.validationStatus)) {
       events = events.filter((e) => e.categoryId === args.categoryId);
     }
 
@@ -92,14 +97,16 @@ export const create = mutation({
     title: v.string(),
     description: v.string(),
     marketId: v.id("markets"),
-    categoryId: v.optional(v.id("categories")),
+    categoryId: v.optional(v.id("eventCategories")),
     pillar: v.optional(v.string()),
-    date: v.optional(v.string()),
-    startTime: v.optional(v.string()),
-    endTime: v.optional(v.string()),
+    dateRaw: v.optional(v.string()),
+    dateStart: v.optional(v.string()),
+    timeStart: v.optional(v.string()),
+    timeEnd: v.optional(v.string()),
     locationName: v.optional(v.string()),
     locationAddress: v.optional(v.string()),
-    price: v.optional(v.string()),
+    costRaw: v.optional(v.string()),
+    costType: v.optional(v.string()),
     difficultyLevel: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     sourceUrl: v.optional(v.string()),
@@ -117,16 +124,19 @@ export const create = mutation({
       marketId: args.marketId,
       categoryId: args.categoryId,
       pillar: args.pillar,
-      status: "approved",
-      date: args.date,
-      startTime: args.startTime,
-      endTime: args.endTime,
+      validationStatus: "validated",
+      dateRaw: args.dateRaw,
+      dateStart: args.dateStart,
+      timeStart: args.timeStart,
+      timeEnd: args.timeEnd,
       locationName: args.locationName,
       locationAddress: args.locationAddress,
-      price: args.price,
+      costRaw: args.costRaw,
+      costType: args.costType,
       difficultyLevel: args.difficultyLevel,
       ageAppropriate: true,
       tags: args.tags ?? [],
+      adminReviewed: true,
       discoveredAt: now,
       lastUpdatedAt: now,
       approvedBy: userId,
@@ -140,18 +150,22 @@ export const update = mutation({
     id: v.id("events"),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
-    categoryId: v.optional(v.id("categories")),
+    categoryId: v.optional(v.id("eventCategories")),
     pillar: v.optional(v.string()),
-    date: v.optional(v.string()),
-    startTime: v.optional(v.string()),
-    endTime: v.optional(v.string()),
+    dateRaw: v.optional(v.string()),
+    dateStart: v.optional(v.string()),
+    dateEnd: v.optional(v.string()),
+    timeStart: v.optional(v.string()),
+    timeEnd: v.optional(v.string()),
     locationName: v.optional(v.string()),
     locationAddress: v.optional(v.string()),
-    price: v.optional(v.string()),
+    costRaw: v.optional(v.string()),
+    costType: v.optional(v.string()),
     difficultyLevel: v.optional(v.string()),
     ageAppropriate: v.optional(v.boolean()),
     tags: v.optional(v.array(v.string())),
     sourceUrl: v.optional(v.string()),
+    adminNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -172,7 +186,8 @@ export const approve = mutation({
     if (!userId) throw new Error("Not authenticated");
 
     await ctx.db.patch(args.id, {
-      status: "approved",
+      validationStatus: "validated",
+      adminReviewed: true,
       approvedBy: userId,
       approvedAt: Date.now(),
       lastUpdatedAt: Date.now(),
@@ -187,7 +202,8 @@ export const reject = mutation({
     if (!userId) throw new Error("Not authenticated");
 
     await ctx.db.patch(args.id, {
-      status: "rejected",
+      validationStatus: "rejected",
+      adminReviewed: true,
       lastUpdatedAt: Date.now(),
     });
   },
@@ -196,7 +212,7 @@ export const reject = mutation({
 export const bulkUpdateStatus = mutation({
   args: {
     ids: v.array(v.id("events")),
-    status: v.string(),
+    validationStatus: v.string(),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -205,10 +221,11 @@ export const bulkUpdateStatus = mutation({
     const now = Date.now();
     for (const id of args.ids) {
       const patch: Record<string, unknown> = {
-        status: args.status,
+        validationStatus: args.validationStatus,
+        adminReviewed: true,
         lastUpdatedAt: now,
       };
-      if (args.status === "approved") {
+      if (args.validationStatus === "validated") {
         patch.approvedBy = userId;
         patch.approvedAt = now;
       }
@@ -231,17 +248,16 @@ export const getCountsByStatus = query({
     }
 
     const counts: Record<string, number> = {
-      raw: 0,
-      classified: 0,
-      approved: 0,
+      pending: 0,
+      validated: 0,
       rejected: 0,
-      archived: 0,
+      needs_review: 0,
       total: events.length,
     };
 
     for (const event of events) {
-      if (counts[event.status] !== undefined) {
-        counts[event.status]++;
+      if (counts[event.validationStatus] !== undefined) {
+        counts[event.validationStatus]++;
       }
     }
 
@@ -249,7 +265,7 @@ export const getCountsByStatus = query({
   },
 });
 
-// Public query — approved events for the customer-facing calendar (no auth required)
+// Public query — validated/approved events for the customer-facing calendar
 export const listApproved = query({
   args: {
     pillar: v.optional(v.string()),
@@ -261,14 +277,16 @@ export const listApproved = query({
     if (args.marketId) {
       events = await ctx.db
         .query("events")
-        .withIndex("by_market_status", (q) =>
-          q.eq("marketId", args.marketId!).eq("status", "approved")
+        .withIndex("by_market_validationStatus", (q) =>
+          q.eq("marketId", args.marketId!).eq("validationStatus", "validated")
         )
         .collect();
     } else {
       events = await ctx.db
         .query("events")
-        .withIndex("by_status", (q) => q.eq("status", "approved"))
+        .withIndex("by_validationStatus", (q) =>
+          q.eq("validationStatus", "validated")
+        )
         .collect();
     }
 
@@ -286,13 +304,24 @@ export const listApproved = query({
           _id: event._id,
           title: event.title,
           description: event.description,
+          briefSummary: event.briefSummary,
           pillar: event.pillar,
-          date: event.date,
-          startTime: event.startTime,
-          endTime: event.endTime,
+          dateRaw: event.dateRaw,
+          dateStart: event.dateStart,
+          dateEnd: event.dateEnd,
+          timeStart: event.timeStart,
+          timeEnd: event.timeEnd,
+          isRecurring: event.isRecurring,
+          recurrencePattern: event.recurrencePattern,
           locationName: event.locationName,
           locationAddress: event.locationAddress,
-          price: event.price,
+          locationCity: event.locationCity,
+          locationState: event.locationState,
+          isVirtual: event.isVirtual,
+          costRaw: event.costRaw,
+          costType: event.costType,
+          costMin: event.costMin,
+          costMax: event.costMax,
           difficultyLevel: event.difficultyLevel,
           tags: event.tags,
           sourceUrl: event.sourceUrl,
@@ -315,13 +344,13 @@ export const listActiveMarkets = query({
   },
 });
 
-export const listByRun = query({
-  args: { discoveryRunId: v.id("discoveryRuns") },
+export const listByJob = query({
+  args: { discoveryJobId: v.id("eventDiscoveryJobs") },
   handler: async (ctx, args) => {
     const events = await ctx.db
       .query("events")
-      .withIndex("by_discoveryRun", (q) =>
-        q.eq("discoveryRunId", args.discoveryRunId)
+      .withIndex("by_discoveryJob", (q) =>
+        q.eq("discoveryJobId", args.discoveryJobId)
       )
       .collect();
 
@@ -341,70 +370,136 @@ export const listByRun = query({
   },
 });
 
-// Called by discovery action — internal only
+// Called by the orchestrator action — internal only
 export const createFromDiscovery = internalMutation({
   args: {
     title: v.string(),
     description: v.string(),
+    briefSummary: v.optional(v.string()),
     marketId: v.id("markets"),
-    rawData: v.string(),
+    categoryId: v.optional(v.id("eventCategories")),
+    pillar: v.optional(v.string()),
+    originalPayload: v.optional(v.string()),
     sourceUrl: v.optional(v.string()),
-    date: v.optional(v.string()),
-    startTime: v.optional(v.string()),
-    endTime: v.optional(v.string()),
+    sourceDomain: v.optional(v.string()),
+    dateRaw: v.optional(v.string()),
+    dateStart: v.optional(v.string()),
+    dateEnd: v.optional(v.string()),
+    timeStart: v.optional(v.string()),
+    timeEnd: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    isRecurring: v.optional(v.boolean()),
+    recurrencePattern: v.optional(v.string()),
     locationName: v.optional(v.string()),
     locationAddress: v.optional(v.string()),
-    price: v.optional(v.string()),
-    discoveryRunId: v.id("discoveryRuns"),
+    locationCity: v.optional(v.string()),
+    locationState: v.optional(v.string()),
+    isVirtual: v.optional(v.boolean()),
+    virtualUrl: v.optional(v.string()),
+    costRaw: v.optional(v.string()),
+    costType: v.optional(v.string()),
+    costMin: v.optional(v.number()),
+    costMax: v.optional(v.number()),
+    tags: v.optional(v.array(v.string())),
+    validationStatus: v.string(),
+    validationConfidence: v.optional(v.number()),
+    validationNotes: v.optional(v.string()),
+    discoveryJobId: v.id("eventDiscoveryJobs"),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    return await ctx.db.insert("events", {
+
+    // Generate dedup hash
+    const dedupHash = generateDedupHash(
+      args.title,
+      args.dateStart,
+      args.locationName
+    );
+
+    // Check for exact hash match
+    const exactMatch = await ctx.db
+      .query("events")
+      .withIndex("by_dedupHash", (q) => q.eq("dedupHash", dedupHash))
+      .first();
+
+    if (exactMatch) {
+      // Exact duplicate — skip
+      return { inserted: false, reason: "exact_duplicate", eventId: exactMatch._id };
+    }
+
+    // Check for fuzzy match — same date + similar title
+    let isDuplicate = false;
+    if (args.dateStart) {
+      const sameDateEvents = await ctx.db
+        .query("events")
+        .withIndex("by_market", (q) => q.eq("marketId", args.marketId))
+        .collect();
+
+      for (const existing of sameDateEvents) {
+        if (existing.dateStart === args.dateStart) {
+          const similarity = fuzzyTitleSimilarity(args.title, existing.title);
+          if (similarity > 0.85) {
+            isDuplicate = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Extract domain from source URL
+    let sourceDomain = args.sourceDomain;
+    if (!sourceDomain && args.sourceUrl) {
+      try {
+        sourceDomain = new URL(args.sourceUrl).hostname;
+      } catch {
+        // Invalid URL, skip domain extraction
+      }
+    }
+
+    const eventId = await ctx.db.insert("events", {
       title: args.title,
       description: args.description,
+      briefSummary: args.briefSummary,
       source: "perplexity_discovery",
       sourceUrl: args.sourceUrl,
+      sourceDomain,
+      sourceExtractedAt: now,
       marketId: args.marketId,
-      status: "raw",
-      rawData: args.rawData,
-      date: args.date,
-      startTime: args.startTime,
-      endTime: args.endTime,
+      categoryId: args.categoryId,
+      pillar: args.pillar,
+      originalPayload: args.originalPayload,
+      dateRaw: args.dateRaw,
+      dateStart: args.dateStart,
+      dateEnd: args.dateEnd,
+      timeStart: args.timeStart,
+      timeEnd: args.timeEnd,
+      timezone: args.timezone,
+      isRecurring: args.isRecurring,
+      recurrencePattern: args.recurrencePattern,
       locationName: args.locationName,
       locationAddress: args.locationAddress,
-      price: args.price,
+      locationCity: args.locationCity,
+      locationState: args.locationState,
+      isVirtual: args.isVirtual,
+      virtualUrl: args.virtualUrl,
+      costRaw: args.costRaw,
+      costType: args.costType,
+      costMin: args.costMin,
+      costMax: args.costMax,
+      tags: args.tags ?? [],
       ageAppropriate: true,
-      tags: [],
+      validationStatus: isDuplicate ? "needs_review" : args.validationStatus,
+      validationConfidence: args.validationConfidence,
+      validationNotes: isDuplicate
+        ? `${args.validationNotes ?? ""} [Flagged as potential duplicate]`.trim()
+        : args.validationNotes,
+      dedupHash,
+      isDuplicate,
       discoveredAt: now,
       lastUpdatedAt: now,
-      discoveryRunId: args.discoveryRunId,
+      discoveryJobId: args.discoveryJobId,
     });
-  },
-});
 
-// Called by classify action — internal only
-export const updateClassification = internalMutation({
-  args: {
-    id: v.id("events"),
-    categoryId: v.optional(v.id("categories")),
-    pillar: v.optional(v.string()),
-    difficultyLevel: v.optional(v.string()),
-    tags: v.array(v.string()),
-    ageAppropriate: v.boolean(),
-    classificationConfidence: v.number(),
-    classificationNotes: v.optional(v.string()),
-    preserveStatus: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const { id, preserveStatus, ...updates } = args;
-    const patch: Record<string, unknown> = {
-      ...updates,
-      lastUpdatedAt: Date.now(),
-    };
-    // Don't demote approved events to "classified"
-    if (!preserveStatus) {
-      patch.status = "classified";
-    }
-    await ctx.db.patch(id, patch);
+    return { inserted: true, isDuplicate, eventId };
   },
 });

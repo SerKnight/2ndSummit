@@ -51,7 +51,7 @@ import {
   MoreHorizontal,
   CheckCircle,
   XCircle,
-  Wand2,
+  Copy,
 } from "lucide-react";
 import { pillarColors, statusColors, PILLARS } from "@/lib/pillars";
 
@@ -64,13 +64,13 @@ export default function EventsPage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   const markets = useQuery(api.markets.list);
-  const categories = useQuery(api.categories.list, {});
+  const categories = useQuery(api.eventCategories.list, {});
   const events = useQuery(api.events.list, {
     marketId:
       marketFilter !== "all"
         ? (marketFilter as Id<"markets">)
         : undefined,
-    status: statusFilter !== "all" ? statusFilter : undefined,
+    validationStatus: statusFilter !== "all" ? statusFilter : undefined,
     pillar: pillarFilter !== "all" ? pillarFilter : undefined,
   });
   const eventDetail = useQuery(
@@ -82,7 +82,6 @@ export default function EventsPage() {
   const rejectEvent = useMutation(api.events.reject);
   const bulkUpdateStatus = useMutation(api.events.bulkUpdateStatus);
   const createEvent = useMutation(api.events.create);
-  const triggerClassification = useMutation(api.classify.triggerClassification);
 
   const [form, setForm] = useState({
     title: "",
@@ -90,12 +89,14 @@ export default function EventsPage() {
     marketId: "" as string,
     categoryId: "" as string,
     pillar: "" as string,
-    date: "",
-    startTime: "",
-    endTime: "",
+    dateRaw: "",
+    dateStart: "",
+    timeStart: "",
+    timeEnd: "",
     locationName: "",
     locationAddress: "",
-    price: "",
+    costRaw: "",
+    costType: "",
     difficultyLevel: "",
     tags: "",
     sourceUrl: "",
@@ -109,15 +110,17 @@ export default function EventsPage() {
         description: form.description,
         marketId: form.marketId as Id<"markets">,
         categoryId: form.categoryId
-          ? (form.categoryId as Id<"categories">)
+          ? (form.categoryId as Id<"eventCategories">)
           : undefined,
         pillar: form.pillar || undefined,
-        date: form.date || undefined,
-        startTime: form.startTime || undefined,
-        endTime: form.endTime || undefined,
+        dateRaw: form.dateRaw || undefined,
+        dateStart: form.dateStart || undefined,
+        timeStart: form.timeStart || undefined,
+        timeEnd: form.timeEnd || undefined,
         locationName: form.locationName || undefined,
         locationAddress: form.locationAddress || undefined,
-        price: form.price || undefined,
+        costRaw: form.costRaw || undefined,
+        costType: form.costType || undefined,
         difficultyLevel: form.difficultyLevel || undefined,
         tags: form.tags
           ? form.tags.split(",").map((t) => t.trim()).filter(Boolean)
@@ -132,12 +135,14 @@ export default function EventsPage() {
         marketId: "",
         categoryId: "",
         pillar: "",
-        date: "",
-        startTime: "",
-        endTime: "",
+        dateRaw: "",
+        dateStart: "",
+        timeStart: "",
+        timeEnd: "",
         locationName: "",
         locationAddress: "",
-        price: "",
+        costRaw: "",
+        costType: "",
         difficultyLevel: "",
         tags: "",
         sourceUrl: "",
@@ -149,31 +154,15 @@ export default function EventsPage() {
     }
   };
 
-  const handleBulkAction = async (status: string) => {
+  const handleBulkAction = async (validationStatus: string) => {
     const ids = Array.from(selectedIds) as Id<"events">[];
     if (ids.length === 0) return;
     try {
-      await bulkUpdateStatus({ ids, status });
-      toast.success(`${ids.length} events updated to ${status}`);
+      await bulkUpdateStatus({ ids, validationStatus });
+      toast.success(`${ids.length} events updated to ${validationStatus}`);
       setSelectedIds(new Set());
     } catch {
       toast.error("Bulk update failed");
-    }
-  };
-
-  const handleClassify = async () => {
-    try {
-      await triggerClassification({
-        marketId:
-          marketFilter !== "all"
-            ? (marketFilter as Id<"markets">)
-            : undefined,
-      });
-      toast.success(
-        "Classification started — uncategorized events will update in real-time"
-      );
-    } catch {
-      toast.error("Failed to start classification");
     }
   };
 
@@ -203,10 +192,6 @@ export default function EventsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleClassify}>
-            <Wand2 className="mr-2 h-4 w-4" />
-            Classify Uncategorized
-          </Button>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -306,9 +291,9 @@ export default function EventsPage() {
                     <Label>Date</Label>
                     <Input
                       type="date"
-                      value={form.date}
+                      value={form.dateStart}
                       onChange={(e) =>
-                        setForm({ ...form, date: e.target.value })
+                        setForm({ ...form, dateStart: e.target.value })
                       }
                     />
                   </div>
@@ -316,9 +301,9 @@ export default function EventsPage() {
                     <Label>Start Time</Label>
                     <Input
                       type="time"
-                      value={form.startTime}
+                      value={form.timeStart}
                       onChange={(e) =>
-                        setForm({ ...form, startTime: e.target.value })
+                        setForm({ ...form, timeStart: e.target.value })
                       }
                     />
                   </div>
@@ -326,9 +311,9 @@ export default function EventsPage() {
                     <Label>End Time</Label>
                     <Input
                       type="time"
-                      value={form.endTime}
+                      value={form.timeEnd}
                       onChange={(e) =>
-                        setForm({ ...form, endTime: e.target.value })
+                        setForm({ ...form, timeEnd: e.target.value })
                       }
                     />
                   </div>
@@ -353,33 +338,52 @@ export default function EventsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Price</Label>
+                    <Label>Cost</Label>
                     <Input
-                      value={form.price}
+                      value={form.costRaw}
                       onChange={(e) =>
-                        setForm({ ...form, price: e.target.value })
+                        setForm({ ...form, costRaw: e.target.value })
                       }
                       placeholder="Free / $20 / etc"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Difficulty</Label>
+                    <Label>Cost Type</Label>
                     <Select
-                      value={form.difficultyLevel}
+                      value={form.costType}
                       onValueChange={(val) =>
-                        setForm({ ...form, difficultyLevel: val })
+                        setForm({ ...form, costType: val })
                       }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Easy">Easy</SelectItem>
-                        <SelectItem value="Moderate">Moderate</SelectItem>
-                        <SelectItem value="Challenging">Challenging</SelectItem>
+                        <SelectItem value="free">Free</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="donation">Donation</SelectItem>
+                        <SelectItem value="varies">Varies</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Difficulty</Label>
+                  <Select
+                    value={form.difficultyLevel}
+                    onValueChange={(val) =>
+                      setForm({ ...form, difficultyLevel: val })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Easy">Easy</SelectItem>
+                      <SelectItem value="Moderate">Moderate</SelectItem>
+                      <SelectItem value="Challenging">Challenging</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Tags (comma-separated)</Label>
@@ -448,7 +452,7 @@ export default function EventsPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => handleBulkAction("approved")}
+            onClick={() => handleBulkAction("validated")}
           >
             <CheckCircle className="mr-1 h-4 w-4" />
             Approve
@@ -475,9 +479,9 @@ export default function EventsPage() {
       <Tabs value={statusFilter} onValueChange={setStatusFilter}>
         <TabsList>
           <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="raw">Raw</TabsTrigger>
-          <TabsTrigger value="classified">Classified</TabsTrigger>
-          <TabsTrigger value="approved">Approved</TabsTrigger>
+          <TabsTrigger value="pending">Pending</TabsTrigger>
+          <TabsTrigger value="needs_review">Needs Review</TabsTrigger>
+          <TabsTrigger value="validated">Validated</TabsTrigger>
           <TabsTrigger value="rejected">Rejected</TabsTrigger>
         </TabsList>
 
@@ -491,7 +495,7 @@ export default function EventsPage() {
           ) : events.length === 0 ? (
             <div className="rounded-md border p-8 text-center">
               <p className="text-muted-foreground">
-                No events found. Run a discovery or create events manually.
+                No events found. Run event discovery or create events manually.
               </p>
             </div>
           ) : (
@@ -514,6 +518,7 @@ export default function EventsPage() {
                     <TableHead>Pillar</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Confidence</TableHead>
+                    <TableHead>Dedup</TableHead>
                     <TableHead className="w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -536,7 +541,7 @@ export default function EventsPage() {
                         {event.title}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
-                        {event.date || "—"}
+                        {event.dateStart || event.dateRaw || "—"}
                       </TableCell>
                       <TableCell className="max-w-[150px] truncate">
                         {event.locationName || "—"}
@@ -555,15 +560,28 @@ export default function EventsPage() {
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={statusColors[event.status] || ""}
+                          className={
+                            statusColors[event.validationStatus] || ""
+                          }
                         >
-                          {event.status}
+                          {event.validationStatus}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {event.classificationConfidence
-                          ? `${Math.round(event.classificationConfidence * 100)}%`
+                        {event.validationConfidence
+                          ? `${Math.round(event.validationConfidence * 100)}%`
                           : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {event.isDuplicate && (
+                          <Badge
+                            variant="outline"
+                            className="bg-orange-100 text-orange-800 border-orange-300"
+                          >
+                            <Copy className="mr-1 h-3 w-3" />
+                            Dup
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
@@ -613,7 +631,10 @@ export default function EventsPage() {
       </Tabs>
 
       {/* Event Detail Drawer */}
-      <Sheet open={!!detailId} onOpenChange={(open) => !open && setDetailId(null)}>
+      <Sheet
+        open={!!detailId}
+        onOpenChange={(open) => !open && setDetailId(null)}
+      >
         <SheetContent className="overflow-y-auto sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>{eventDetail?.title || "Event Detail"}</SheetTitle>
@@ -623,9 +644,11 @@ export default function EventsPage() {
               <div className="flex gap-2">
                 <Badge
                   variant="outline"
-                  className={statusColors[eventDetail.status] || ""}
+                  className={
+                    statusColors[eventDetail.validationStatus] || ""
+                  }
                 >
-                  {eventDetail.status}
+                  {eventDetail.validationStatus}
                 </Badge>
                 {eventDetail.pillar && (
                   <Badge
@@ -633,6 +656,14 @@ export default function EventsPage() {
                     className={pillarColors[eventDetail.pillar] || ""}
                   >
                     {eventDetail.pillar}
+                  </Badge>
+                )}
+                {eventDetail.isDuplicate && (
+                  <Badge
+                    variant="outline"
+                    className="bg-orange-100 text-orange-800 border-orange-300"
+                  >
+                    Potential Duplicate
                   </Badge>
                 )}
               </div>
@@ -643,6 +674,15 @@ export default function EventsPage() {
                 </Label>
                 <p className="text-sm">{eventDetail.description}</p>
               </div>
+
+              {eventDetail.briefSummary && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Brief Summary
+                  </Label>
+                  <p className="text-sm">{eventDetail.briefSummary}</p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -659,13 +699,20 @@ export default function EventsPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Date</Label>
-                  <p className="text-sm">{eventDetail.date || "—"}</p>
+                  <p className="text-sm">
+                    {eventDetail.dateStart || eventDetail.dateRaw || "—"}
+                  </p>
+                  {eventDetail.dateEnd && (
+                    <p className="text-xs text-muted-foreground">
+                      to {eventDetail.dateEnd}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">Time</Label>
                   <p className="text-sm">
-                    {eventDetail.startTime || "—"}
-                    {eventDetail.endTime ? ` – ${eventDetail.endTime}` : ""}
+                    {eventDetail.timeStart || "—"}
+                    {eventDetail.timeEnd ? ` – ${eventDetail.timeEnd}` : ""}
                   </p>
                 </div>
                 <div>
@@ -678,12 +725,24 @@ export default function EventsPage() {
                   <p className="text-xs text-muted-foreground">
                     {eventDetail.locationAddress || ""}
                   </p>
+                  {(eventDetail.locationCity || eventDetail.locationState) && (
+                    <p className="text-xs text-muted-foreground">
+                      {[eventDetail.locationCity, eventDetail.locationState]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">
-                    Price
+                    Cost
                   </Label>
-                  <p className="text-sm">{eventDetail.price || "—"}</p>
+                  <p className="text-sm">{eventDetail.costRaw || "—"}</p>
+                  {eventDetail.costType && (
+                    <p className="text-xs text-muted-foreground">
+                      Type: {eventDetail.costType}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">
@@ -695,15 +754,26 @@ export default function EventsPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-muted-foreground">
-                    Confidence
+                    Validation Confidence
                   </Label>
                   <p className="text-sm">
-                    {eventDetail.classificationConfidence
-                      ? `${Math.round(eventDetail.classificationConfidence * 100)}%`
+                    {eventDetail.validationConfidence
+                      ? `${Math.round(eventDetail.validationConfidence * 100)}%`
                       : "—"}
                   </p>
                 </div>
               </div>
+
+              {eventDetail.isRecurring && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">
+                    Recurring
+                  </Label>
+                  <p className="text-sm">
+                    {eventDetail.recurrencePattern || "Yes (pattern unknown)"}
+                  </p>
+                </div>
+              )}
 
               {eventDetail.tags && eventDetail.tags.length > 0 && (
                 <div>
@@ -718,22 +788,22 @@ export default function EventsPage() {
                 </div>
               )}
 
-              {eventDetail.classificationNotes && (
+              {eventDetail.validationNotes && (
                 <div>
                   <Label className="text-xs text-muted-foreground">
-                    Classification Notes
+                    Validation Notes
                   </Label>
-                  <p className="text-sm">{eventDetail.classificationNotes}</p>
+                  <p className="text-sm">{eventDetail.validationNotes}</p>
                 </div>
               )}
 
-              {eventDetail.rawData && (
+              {eventDetail.originalPayload && (
                 <div>
                   <Label className="text-xs text-muted-foreground">
-                    Raw Discovery Data
+                    Original Discovery Data
                   </Label>
                   <pre className="mt-1 max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs">
-                    {eventDetail.rawData}
+                    {eventDetail.originalPayload}
                   </pre>
                 </div>
               )}
@@ -749,7 +819,7 @@ export default function EventsPage() {
                     rel="noopener noreferrer"
                     className="text-sm text-primary underline"
                   >
-                    {eventDetail.sourceUrl}
+                    {eventDetail.sourceDomain || eventDetail.sourceUrl}
                   </a>
                 </div>
               )}

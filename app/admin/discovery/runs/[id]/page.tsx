@@ -35,13 +35,13 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { runStatusColors, pillarColors, statusColors } from "@/lib/pillars";
 
-export default function DiscoveryRunDetailPage() {
+export default function DiscoveryJobDetailPage() {
   const params = useParams();
-  const runId = params.id as Id<"discoveryRuns">;
+  const jobId = params.id as Id<"eventDiscoveryJobs">;
 
-  const run = useQuery(api.discoveryRuns.get, { id: runId });
-  const events = useQuery(api.events.listByRun, { discoveryRunId: runId });
-  const llmLogs = useQuery(api.llmLogs.list, { discoveryRunId: runId });
+  const job = useQuery(api.eventDiscoveryJobs.get, { id: jobId });
+  const events = useQuery(api.events.listByJob, { discoveryJobId: jobId });
+  const llmLogs = useQuery(api.llmLogs.list, { discoveryJobId: jobId });
 
   const [selectedLogId, setSelectedLogId] = useState<Id<"llmLogs"> | null>(
     null
@@ -51,7 +51,7 @@ export default function DiscoveryRunDetailPage() {
     selectedLogId ? { id: selectedLogId } : "skip"
   );
 
-  if (run === undefined) {
+  if (job === undefined) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
@@ -61,16 +61,16 @@ export default function DiscoveryRunDetailPage() {
     );
   }
 
-  if (run === null) {
+  if (job === null) {
     return (
       <div className="space-y-4">
         <Link href="/admin/discovery">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Discovery
+            Back to Event Discovery
           </Button>
         </Link>
-        <p className="text-muted-foreground">Discovery run not found.</p>
+        <p className="text-muted-foreground">Discovery job not found.</p>
       </div>
     );
   }
@@ -95,7 +95,9 @@ export default function DiscoveryRunDetailPage() {
     }
   };
 
-  const config = run.config;
+  const isRunning = ["pending", "searching", "validating", "storing"].includes(
+    job.status
+  );
 
   return (
     <div className="space-y-6">
@@ -110,37 +112,37 @@ export default function DiscoveryRunDetailPage() {
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold tracking-tight">
-                {run.marketName}
+                {job.marketName}
               </h1>
               <Badge
                 variant="outline"
-                className={runStatusColors[run.status] || ""}
+                className={runStatusColors[job.status] || ""}
               >
-                {run.status === "running" && (
+                {isRunning && (
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 )}
-                {run.status}
+                {job.status}
               </Badge>
             </div>
             <p className="text-muted-foreground">
-              Started {new Date(run.startedAt).toLocaleString()}
+              {job.categoryName}
               {" · "}
-              {formatDuration(run.startedAt, run.completedAt)}
+              Started {new Date(job.startedAt).toLocaleString()}
               {" · "}
-              {run.eventsFound} events found
+              {formatDuration(job.startedAt, job.completedAt)}
             </p>
           </div>
         </div>
       </div>
 
       {/* Error Alert */}
-      {run.errorMessage && (
+      {job.errorMessage && (
         <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
           <p className="text-sm font-medium text-red-800 dark:text-red-200">
             Error
           </p>
           <p className="mt-1 text-sm text-red-700 dark:text-red-300">
-            {run.errorMessage}
+            {job.errorMessage}
           </p>
         </div>
       )}
@@ -155,124 +157,88 @@ export default function DiscoveryRunDetailPage() {
           <TabsTrigger value="logs">
             LLM Logs{llmLogs ? ` (${llmLogs.length})` : ""}
           </TabsTrigger>
-          <TabsTrigger value="raw">
-            Raw Responses
-            {run.rawResponses ? ` (${run.rawResponses.length})` : ""}
-          </TabsTrigger>
+          {job.rawResponse && (
+            <TabsTrigger value="raw">Raw Response</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Run Configuration</CardTitle>
+              <CardTitle>Job Configuration</CardTitle>
               <CardDescription>
-                Parameters used for this discovery run
+                Parameters used for this event discovery job
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {config ? (
-                <div className="space-y-6">
-                  {/* Parameters Grid */}
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Time Range
-                      </Label>
-                      <p className="text-sm font-medium">
-                        {config.timeRangeDays} days
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Radius
-                      </Label>
-                      <p className="text-sm font-medium">
-                        {config.radiusMiles} miles
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Batch Size
-                      </Label>
-                      <p className="text-sm font-medium">{config.batchSize}</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Temperature
-                      </Label>
-                      <p className="text-sm font-medium">
-                        {config.temperature}
-                      </p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">
-                        Model
-                      </Label>
-                      <p className="font-mono text-sm">{config.model}</p>
-                    </div>
-                  </div>
-
-                  {/* Categories */}
+              <div className="space-y-6">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      Categories Searched ({run.categoriesSearched.length})
+                      Market
                     </Label>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {run.categoriesSearched.map((cat) => (
-                        <Badge
-                          key={cat}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {cat}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Prompts */}
-                  <div>
-                    <Label className="text-xs text-muted-foreground">
-                      System Prompt
-                    </Label>
-                    <pre className="mt-1 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
-                      {config.systemPromptUsed}
-                    </pre>
+                    <p className="text-sm font-medium">{job.marketName}</p>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      User Prompt Template
+                      Category
                     </Label>
-                    <pre className="mt-1 rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
-                      {config.userPromptTemplateUsed}
-                    </pre>
+                    <p className="text-sm font-medium">{job.categoryName}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Date Range
+                    </Label>
+                    <p className="text-sm font-medium">
+                      {job.dateRangeStart ?? "—"} to {job.dateRangeEnd ?? "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Events Found
+                    </Label>
+                    <p className="text-sm font-medium">{job.eventsFound}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Events Validated
+                    </Label>
+                    <p className="text-sm font-medium">
+                      {job.eventsValidated ?? "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Events Stored
+                    </Label>
+                    <p className="text-sm font-medium">
+                      {job.eventsStored ?? "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">
+                      Duration
+                    </Label>
+                    <p className="text-sm font-medium">
+                      {formatDuration(job.startedAt, job.completedAt)}
+                    </p>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    This run used default settings (no configuration snapshot
-                    available).
-                  </p>
+
+                {/* Prompt Used */}
+                {job.promptUsed && (
                   <div>
                     <Label className="text-xs text-muted-foreground">
-                      Categories Searched
+                      Prompt Used
                     </Label>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {run.categoriesSearched.map((cat) => (
-                        <Badge
-                          key={cat}
-                          variant="secondary"
-                          className="text-xs"
-                        >
-                          {cat}
-                        </Badge>
-                      ))}
-                    </div>
+                    <pre className="mt-1 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+                      {job.promptUsed}
+                    </pre>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -284,7 +250,7 @@ export default function DiscoveryRunDetailPage() {
               <CardTitle>Events Found</CardTitle>
               <CardDescription>
                 {events
-                  ? `${events.length} events discovered in this run`
+                  ? `${events.length} events discovered in this job`
                   : "Loading events..."}
               </CardDescription>
             </CardHeader>
@@ -297,9 +263,9 @@ export default function DiscoveryRunDetailPage() {
                 </div>
               ) : events.length === 0 ? (
                 <p className="py-8 text-center text-muted-foreground">
-                  {run.status === "running"
+                  {isRunning
                     ? "Events will appear here as they are discovered..."
-                    : "No events were found in this run."}
+                    : "No events were found in this job."}
                 </p>
               ) : (
                 <div className="rounded-md border">
@@ -310,7 +276,8 @@ export default function DiscoveryRunDetailPage() {
                         <TableHead>Date</TableHead>
                         <TableHead>Location</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Category</TableHead>
+                        <TableHead>Confidence</TableHead>
+                        <TableHead>Duplicate</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -318,40 +285,50 @@ export default function DiscoveryRunDetailPage() {
                         <TableRow key={event._id}>
                           <TableCell className="max-w-[250px] font-medium">
                             <div className="truncate">{event.title}</div>
-                            {event.description && (
+                            {event.briefSummary && (
                               <div className="truncate text-xs text-muted-foreground">
-                                {event.description}
+                                {event.briefSummary}
                               </div>
                             )}
                           </TableCell>
                           <TableCell className="whitespace-nowrap text-sm">
-                            {event.date || "—"}
+                            {event.dateStart || event.dateRaw || "—"}
                           </TableCell>
                           <TableCell className="max-w-[200px]">
                             <div className="truncate text-sm">
                               {event.locationName || "—"}
                             </div>
+                            {event.locationCity && (
+                              <div className="truncate text-xs text-muted-foreground">
+                                {event.locationCity}
+                                {event.locationState &&
+                                  `, ${event.locationState}`}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge
                               variant="outline"
-                              className={statusColors[event.status] || ""}
+                              className={
+                                statusColors[event.validationStatus] || ""
+                              }
                             >
-                              {event.status}
+                              {event.validationStatus}
                             </Badge>
                           </TableCell>
+                          <TableCell className="text-sm tabular-nums">
+                            {event.validationConfidence != null
+                              ? `${Math.round(event.validationConfidence * 100)}%`
+                              : "—"}
+                          </TableCell>
                           <TableCell>
-                            {event.pillar ? (
+                            {event.isDuplicate && (
                               <Badge
                                 variant="outline"
-                                className={pillarColors[event.pillar] || ""}
+                                className="bg-yellow-100 text-yellow-800 border-yellow-300"
                               >
-                                {event.categoryName}
+                                Dup
                               </Badge>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">
-                                {event.categoryName}
-                              </span>
                             )}
                           </TableCell>
                         </TableRow>
@@ -370,7 +347,7 @@ export default function DiscoveryRunDetailPage() {
             <CardHeader>
               <CardTitle>LLM API Calls</CardTitle>
               <CardDescription>
-                Every API call made during this discovery run
+                Every API call made during this discovery job
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -382,9 +359,9 @@ export default function DiscoveryRunDetailPage() {
                 </div>
               ) : llmLogs.length === 0 ? (
                 <p className="py-8 text-center text-muted-foreground">
-                  {run.status === "running"
+                  {isRunning
                     ? "Logs will appear here as API calls are made..."
-                    : "No API calls were logged for this run."}
+                    : "No API calls were logged for this job."}
                 </p>
               ) : (
                 <div className="rounded-md border">
@@ -394,6 +371,7 @@ export default function DiscoveryRunDetailPage() {
                         <TableHead>Time</TableHead>
                         <TableHead>Provider</TableHead>
                         <TableHead>Model</TableHead>
+                        <TableHead>Action</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Duration</TableHead>
                         <TableHead>Tokens</TableHead>
@@ -416,6 +394,9 @@ export default function DiscoveryRunDetailPage() {
                           </TableCell>
                           <TableCell className="font-mono text-xs">
                             {log.model}
+                          </TableCell>
+                          <TableCell className="capitalize">
+                            {log.action}
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -444,42 +425,24 @@ export default function DiscoveryRunDetailPage() {
           </Card>
         </TabsContent>
 
-        {/* Raw Responses Tab */}
-        <TabsContent value="raw">
-          <Card>
-            <CardHeader>
-              <CardTitle>Raw API Responses</CardTitle>
-              <CardDescription>
-                Unprocessed text returned by Perplexity for each batch
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {run.rawResponses && run.rawResponses.length > 0 ? (
-                <div className="space-y-4">
-                  {run.rawResponses.map((resp, i) => (
-                    <details key={i} className="group">
-                      <summary className="cursor-pointer rounded-md bg-muted px-3 py-2 text-sm font-medium hover:bg-muted/80">
-                        Batch {i + 1}
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {resp.length.toLocaleString()} characters
-                        </span>
-                      </summary>
-                      <pre className="mt-2 max-h-96 overflow-auto rounded-md bg-muted/50 p-3 text-xs whitespace-pre-wrap">
-                        {resp}
-                      </pre>
-                    </details>
-                  ))}
-                </div>
-              ) : (
-                <p className="py-8 text-center text-muted-foreground">
-                  {run.status === "running"
-                    ? "Responses will appear here as batches complete..."
-                    : "No raw responses recorded."}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Raw Response Tab */}
+        {job.rawResponse && (
+          <TabsContent value="raw">
+            <Card>
+              <CardHeader>
+                <CardTitle>Raw API Response</CardTitle>
+                <CardDescription>
+                  Unprocessed text returned by Perplexity
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <pre className="max-h-[600px] overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">
+                  {job.rawResponse}
+                </pre>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Log Detail Sheet */}

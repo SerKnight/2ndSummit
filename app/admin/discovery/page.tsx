@@ -21,13 +21,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Sparkles, Loader2, FileText, Plus } from "lucide-react";
+import { Sparkles, Loader2, Plus } from "lucide-react";
 import { runStatusColors } from "@/lib/pillars";
 import Link from "next/link";
 
 export default function DiscoveryPage() {
   const router = useRouter();
-  const runs = useQuery(api.discoveryRuns.list, {});
+  const jobs = useQuery(api.eventDiscoveryJobs.list, {});
 
   const formatDuration = (start: number, end?: number) => {
     if (!end) return "In progress...";
@@ -36,59 +36,59 @@ export default function DiscoveryPage() {
     return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
   };
 
+  const isRunning = (status: string) =>
+    ["pending", "searching", "validating", "storing"].includes(status);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Discovery</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Event Discovery
+          </h1>
           <p className="text-muted-foreground">
             Discover events using AI-powered web search
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/admin/discovery/templates">
-            <Button variant="outline">
-              <FileText className="mr-2 h-4 w-4" />
-              Manage Templates
-            </Button>
-          </Link>
           <Link href="/admin/discovery/new">
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              New Discovery Run
+              New Discovery Job
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Discovery Runs Table */}
+      {/* Discovery Jobs Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
-            Discovery Runs
+            Event Discovery Jobs
           </CardTitle>
           <CardDescription>
-            History of all event discovery runs — click a run to see full details
+            History of all event discovery jobs — click a job to see full
+            details
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {runs === undefined ? (
+          {jobs === undefined ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : runs.length === 0 ? (
+          ) : jobs.length === 0 ? (
             <div className="py-12 text-center">
               <Sparkles className="mx-auto mb-4 h-10 w-10 text-muted-foreground/50" />
               <p className="mb-2 text-muted-foreground">
-                No discovery runs yet.
+                No discovery jobs yet.
               </p>
               <Link href="/admin/discovery/new">
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
-                  Create Your First Run
+                  Create Your First Job
                 </Button>
               </Link>
             </div>
@@ -98,59 +98,47 @@ export default function DiscoveryPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Market</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Events Found</TableHead>
+                    <TableHead>Found</TableHead>
+                    <TableHead>Validated</TableHead>
+                    <TableHead>Stored</TableHead>
                     <TableHead>Duration</TableHead>
-                    <TableHead>Categories</TableHead>
-                    <TableHead>Config</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {runs.map((run) => (
+                  {jobs.map((job) => (
                     <TableRow
-                      key={run._id}
+                      key={job._id}
                       className="cursor-pointer"
                       onClick={() =>
-                        router.push(`/admin/discovery/runs/${run._id}`)
+                        router.push(`/admin/discovery/runs/${job._id}`)
                       }
                     >
                       <TableCell className="font-medium">
-                        {run.marketName}
+                        {job.marketName}
                       </TableCell>
+                      <TableCell>{job.categoryName}</TableCell>
                       <TableCell>
-                        {new Date(run.startedAt).toLocaleString()}
+                        {new Date(job.startedAt).toLocaleString()}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={runStatusColors[run.status] || ""}
+                          className={runStatusColors[job.status] || ""}
                         >
-                          {run.status === "running" && (
+                          {isRunning(job.status) && (
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                           )}
-                          {run.status}
+                          {job.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{run.eventsFound}</TableCell>
+                      <TableCell>{job.eventsFound}</TableCell>
+                      <TableCell>{job.eventsValidated ?? "—"}</TableCell>
+                      <TableCell>{job.eventsStored ?? "—"}</TableCell>
                       <TableCell>
-                        {formatDuration(run.startedAt, run.completedAt)}
-                      </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
-                        {run.categoriesSearched.slice(0, 3).join(", ")}
-                        {run.categoriesSearched.length > 3 &&
-                          ` +${run.categoriesSearched.length - 3} more`}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {run.config ? (
-                          <span>
-                            {run.config.timeRangeDays}d ·{" "}
-                            {run.config.radiusMiles}mi · batch{" "}
-                            {run.config.batchSize}
-                          </span>
-                        ) : (
-                          <span className="italic">defaults</span>
-                        )}
+                        {formatDuration(job.startedAt, job.completedAt)}
                       </TableCell>
                     </TableRow>
                   ))}

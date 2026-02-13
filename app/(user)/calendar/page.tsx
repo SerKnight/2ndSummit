@@ -31,21 +31,34 @@ import {
   Tag,
   ExternalLink,
   CalendarDays,
+  Repeat,
+  Globe,
 } from "lucide-react";
 
 type ApprovedEvent = {
   _id: Id<"events">;
   title: string;
   description: string;
+  briefSummary?: string;
   pillar?: string;
-  date?: string;
-  startTime?: string;
-  endTime?: string;
+  dateRaw?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  timeStart?: string;
+  timeEnd?: string;
+  isRecurring?: boolean;
+  recurrencePattern?: string;
   locationName?: string;
   locationAddress?: string;
-  price?: string;
+  locationCity?: string;
+  locationState?: string;
+  isVirtual?: boolean;
+  costRaw?: string;
+  costType?: string;
+  costMin?: number;
+  costMax?: number;
   difficultyLevel?: string;
-  tags: string[];
+  tags?: string[];
   sourceUrl?: string;
   marketName: string;
   categoryName: string;
@@ -97,6 +110,10 @@ function parseEventDate(dateStr: string | undefined): Date | null {
   return parsed;
 }
 
+function getEventDate(event: ApprovedEvent): string | undefined {
+  return event.dateStart || event.dateRaw;
+}
+
 function formatDate(dateStr: string | undefined): string {
   if (!dateStr) return "Date TBD";
   const d = parseEventDate(dateStr);
@@ -109,9 +126,15 @@ function formatDate(dateStr: string | undefined): string {
   });
 }
 
-function formatTime(time: string | undefined): string {
-  if (!time) return "";
-  return time;
+function formatCost(event: ApprovedEvent): string | null {
+  if (event.costType === "free") return "Free";
+  if (event.costRaw) return event.costRaw;
+  if (event.costMin != null && event.costMax != null) {
+    if (event.costMin === event.costMax) return `$${event.costMin}`;
+    return `$${event.costMin} - $${event.costMax}`;
+  }
+  if (event.costMin != null) return `From $${event.costMin}`;
+  return null;
 }
 
 export default function CalendarPage() {
@@ -134,8 +157,9 @@ export default function CalendarPage() {
     if (!events) return {};
     const map: Record<string, ApprovedEvent[]> = {};
     for (const event of events) {
-      if (!event.date) continue;
-      const d = parseEventDate(event.date);
+      const dateStr = getEventDate(event);
+      if (!dateStr) continue;
+      const d = parseEventDate(dateStr);
       if (!d) continue;
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       if (!map[key]) map[key] = [];
@@ -147,8 +171,8 @@ export default function CalendarPage() {
   const sortedEvents = useMemo(() => {
     if (!events) return [];
     return [...events].sort((a, b) => {
-      const da = parseEventDate(a.date);
-      const db = parseEventDate(b.date);
+      const da = parseEventDate(getEventDate(a));
+      const db = parseEventDate(getEventDate(b));
       if (!da && !db) return 0;
       if (!da) return 1;
       if (!db) return -1;
@@ -160,7 +184,7 @@ export default function CalendarPage() {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     return sortedEvents.filter((e) => {
-      const d = parseEventDate(e.date);
+      const d = parseEventDate(getEventDate(e));
       return d && d >= now;
     });
   }, [sortedEvents]);
@@ -392,6 +416,7 @@ export default function CalendarPage() {
               upcomingEvents.map((event) => {
                 const style =
                   PILLAR_STYLES[event.pillar ?? ""] ?? PILLAR_STYLES.Discover;
+                const cost = formatCost(event);
                 return (
                   <button
                     key={event._id}
@@ -401,7 +426,7 @@ export default function CalendarPage() {
                     <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                       <div className="flex sm:flex-col items-center sm:items-center gap-2 sm:gap-0 sm:w-16 sm:min-w-16 shrink-0">
                         {(() => {
-                          const d = parseEventDate(event.date);
+                          const d = parseEventDate(getEventDate(event));
                           if (!d) return <span className="text-sm text-gray-400">TBD</span>;
                           return (
                             <>
@@ -429,32 +454,45 @@ export default function CalendarPage() {
                           </Badge>
                         </div>
                         <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                          {event.description}
+                          {event.briefSummary || event.description}
                         </p>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
-                          {event.startTime && (
+                          {event.timeStart && (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {formatTime(event.startTime)}
-                              {event.endTime && ` - ${formatTime(event.endTime)}`}
+                              {event.timeStart}
+                              {event.timeEnd && ` - ${event.timeEnd}`}
                             </span>
                           )}
                           {event.locationName && (
                             <span className="flex items-center gap-1">
                               <MapPin className="h-3 w-3" />
                               {event.locationName}
+                              {event.locationCity && `, ${event.locationCity}`}
                             </span>
                           )}
-                          {event.price && (
+                          {event.isVirtual && (
+                            <span className="flex items-center gap-1">
+                              <Globe className="h-3 w-3" />
+                              Virtual
+                            </span>
+                          )}
+                          {cost && (
                             <span className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
-                              {event.price}
+                              {cost}
                             </span>
                           )}
                           {event.difficultyLevel && (
                             <span className="flex items-center gap-1">
                               <Activity className="h-3 w-3" />
                               {event.difficultyLevel}
+                            </span>
+                          )}
+                          {event.isRecurring && (
+                            <span className="flex items-center gap-1">
+                              <Repeat className="h-3 w-3" />
+                              Recurring
                             </span>
                           )}
                           <span className="text-gray-400">
@@ -499,32 +537,50 @@ export default function CalendarPage() {
                     </Badge>
                   )}
                   <Badge variant="outline">{selectedEvent.categoryName}</Badge>
+                  {selectedEvent.isRecurring && (
+                    <Badge variant="outline" className="text-xs">
+                      <Repeat className="mr-1 h-3 w-3" />
+                      Recurring
+                    </Badge>
+                  )}
                 </div>
                 <SheetTitle className="text-xl">
                   {selectedEvent.title}
                 </SheetTitle>
                 <SheetDescription className="text-base text-gray-600 leading-relaxed">
-                  {selectedEvent.description}
+                  {selectedEvent.briefSummary || selectedEvent.description}
                 </SheetDescription>
               </SheetHeader>
 
               <div className="mt-6 space-y-4">
+                {/* Date */}
                 <div className="flex items-start gap-3">
                   <CalendarDays className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
                   <div>
                     <p className="font-medium text-gray-900">
-                      {formatDate(selectedEvent.date)}
+                      {formatDate(getEventDate(selectedEvent))}
                     </p>
-                    {selectedEvent.startTime && (
+                    {selectedEvent.dateEnd && selectedEvent.dateStart !== selectedEvent.dateEnd && (
                       <p className="text-sm text-gray-500">
-                        {formatTime(selectedEvent.startTime)}
-                        {selectedEvent.endTime &&
-                          ` - ${formatTime(selectedEvent.endTime)}`}
+                        through {formatDate(selectedEvent.dateEnd)}
+                      </p>
+                    )}
+                    {selectedEvent.timeStart && (
+                      <p className="text-sm text-gray-500">
+                        {selectedEvent.timeStart}
+                        {selectedEvent.timeEnd &&
+                          ` - ${selectedEvent.timeEnd}`}
+                      </p>
+                    )}
+                    {selectedEvent.isRecurring && selectedEvent.recurrencePattern && (
+                      <p className="text-sm text-gray-500">
+                        {selectedEvent.recurrencePattern}
                       </p>
                     )}
                   </div>
                 </div>
 
+                {/* Location */}
                 {(selectedEvent.locationName || selectedEvent.locationAddress) && (
                   <div className="flex items-start gap-3">
                     <MapPin className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
@@ -539,17 +595,34 @@ export default function CalendarPage() {
                           {selectedEvent.locationAddress}
                         </p>
                       )}
+                      {(selectedEvent.locationCity || selectedEvent.locationState) && (
+                        <p className="text-sm text-gray-500">
+                          {[selectedEvent.locationCity, selectedEvent.locationState]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {selectedEvent.price && (
+                {/* Virtual */}
+                {selectedEvent.isVirtual && (
                   <div className="flex items-center gap-3">
-                    <DollarSign className="h-5 w-5 text-gray-400 shrink-0" />
-                    <p className="text-gray-900">{selectedEvent.price}</p>
+                    <Globe className="h-5 w-5 text-gray-400 shrink-0" />
+                    <p className="text-gray-900">Virtual Event</p>
                   </div>
                 )}
 
+                {/* Cost */}
+                {formatCost(selectedEvent) && (
+                  <div className="flex items-center gap-3">
+                    <DollarSign className="h-5 w-5 text-gray-400 shrink-0" />
+                    <p className="text-gray-900">{formatCost(selectedEvent)}</p>
+                  </div>
+                )}
+
+                {/* Difficulty */}
                 {selectedEvent.difficultyLevel && (
                   <div className="flex items-center gap-3">
                     <Activity className="h-5 w-5 text-gray-400 shrink-0" />
@@ -557,7 +630,8 @@ export default function CalendarPage() {
                   </div>
                 )}
 
-                {selectedEvent.tags.length > 0 && (
+                {/* Tags */}
+                {selectedEvent.tags && selectedEvent.tags.length > 0 && (
                   <div className="flex items-start gap-3">
                     <Tag className="h-5 w-5 text-gray-400 mt-0.5 shrink-0" />
                     <div className="flex flex-wrap gap-1.5">
@@ -570,11 +644,13 @@ export default function CalendarPage() {
                   </div>
                 )}
 
+                {/* Market */}
                 <div className="flex items-center gap-3 pt-2 border-t">
                   <MapPin className="h-4 w-4 text-gray-300 shrink-0" />
                   <p className="text-sm text-gray-400">{selectedEvent.marketName}</p>
                 </div>
 
+                {/* Source link */}
                 {selectedEvent.sourceUrl && (
                   <a
                     href={selectedEvent.sourceUrl}

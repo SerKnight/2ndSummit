@@ -5,16 +5,16 @@ export const list = query({
   args: {
     provider: v.optional(v.string()),
     action: v.optional(v.string()),
-    discoveryRunId: v.optional(v.id("discoveryRuns")),
+    discoveryJobId: v.optional(v.id("eventDiscoveryJobs")),
   },
   handler: async (ctx, args) => {
     let logs;
 
-    if (args.discoveryRunId) {
+    if (args.discoveryJobId) {
       logs = await ctx.db
         .query("llmLogs")
-        .withIndex("by_discoveryRun", (q) =>
-          q.eq("discoveryRunId", args.discoveryRunId!)
+        .withIndex("by_discoveryJob", (q) =>
+          q.eq("discoveryJobId", args.discoveryJobId!)
         )
         .order("desc")
         .collect();
@@ -66,7 +66,7 @@ export const create = internalMutation({
     status: v.string(),
     errorMessage: v.optional(v.string()),
     marketId: v.optional(v.id("markets")),
-    discoveryRunId: v.optional(v.id("discoveryRuns")),
+    discoveryJobId: v.optional(v.id("eventDiscoveryJobs")),
     eventId: v.optional(v.id("events")),
   },
   handler: async (ctx, args) => {

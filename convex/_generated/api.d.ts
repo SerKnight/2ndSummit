@@ -8,17 +8,21 @@
  * @module
  */
 
-import type * as actions_classifyEvents from "../actions/classifyEvents.js";
 import type * as actions_discoverEvents from "../actions/discoverEvents.js";
+import type * as actions_generateCategoryPrompt from "../actions/generateCategoryPrompt.js";
+import type * as actions_generateMarketSources from "../actions/generateMarketSources.js";
+import type * as actions_runEventDiscovery from "../actions/runEventDiscovery.js";
+import type * as actions_validateEvents from "../actions/validateEvents.js";
 import type * as auth from "../auth.js";
-import type * as categories from "../categories.js";
-import type * as classify from "../classify.js";
-import type * as discoveryRuns from "../discoveryRuns.js";
+import type * as eventCategories from "../eventCategories.js";
+import type * as eventDiscoveryJobs from "../eventDiscoveryJobs.js";
 import type * as events from "../events.js";
 import type * as http from "../http.js";
+import type * as lib_brandContext from "../lib/brandContext.js";
+import type * as lib_dedup from "../lib/dedup.js";
+import type * as lib_promptAssembly from "../lib/promptAssembly.js";
 import type * as llmLogs from "../llmLogs.js";
 import type * as markets from "../markets.js";
-import type * as promptTemplates from "../promptTemplates.js";
 import type * as queries from "../queries.js";
 import type * as users from "../users.js";
 
@@ -29,17 +33,21 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "actions/classifyEvents": typeof actions_classifyEvents;
   "actions/discoverEvents": typeof actions_discoverEvents;
+  "actions/generateCategoryPrompt": typeof actions_generateCategoryPrompt;
+  "actions/generateMarketSources": typeof actions_generateMarketSources;
+  "actions/runEventDiscovery": typeof actions_runEventDiscovery;
+  "actions/validateEvents": typeof actions_validateEvents;
   auth: typeof auth;
-  categories: typeof categories;
-  classify: typeof classify;
-  discoveryRuns: typeof discoveryRuns;
+  eventCategories: typeof eventCategories;
+  eventDiscoveryJobs: typeof eventDiscoveryJobs;
   events: typeof events;
   http: typeof http;
+  "lib/brandContext": typeof lib_brandContext;
+  "lib/dedup": typeof lib_dedup;
+  "lib/promptAssembly": typeof lib_promptAssembly;
   llmLogs: typeof llmLogs;
   markets: typeof markets;
-  promptTemplates: typeof promptTemplates;
   queries: typeof queries;
   users: typeof users;
 }>;

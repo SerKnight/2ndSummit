@@ -29,15 +29,26 @@ type ApprovedEvent = {
   _id: Id<"events">;
   title: string;
   description: string;
+  briefSummary?: string;
   pillar?: string;
-  date?: string;
-  startTime?: string;
-  endTime?: string;
+  dateRaw?: string;
+  dateStart?: string;
+  dateEnd?: string;
+  timeStart?: string;
+  timeEnd?: string;
+  isRecurring?: boolean;
+  recurrencePattern?: string;
   locationName?: string;
   locationAddress?: string;
-  price?: string;
+  locationCity?: string;
+  locationState?: string;
+  isVirtual?: boolean;
+  costRaw?: string;
+  costType?: string;
+  costMin?: number;
+  costMax?: number;
   difficultyLevel?: string;
-  tags: string[];
+  tags?: string[];
   sourceUrl?: string;
   marketName: string;
   categoryName: string;
@@ -48,6 +59,10 @@ function parseEventDate(dateStr: string | undefined): Date | null {
   const parsed = new Date(dateStr);
   if (isNaN(parsed.getTime())) return null;
   return parsed;
+}
+
+function getEventDate(event: ApprovedEvent): string | undefined {
+  return event.dateStart || event.dateRaw;
 }
 
 const PILLAR_BADGE: Record<string, string> = {
@@ -85,12 +100,12 @@ function LandingPage() {
     now.setHours(0, 0, 0, 0);
     return [...events]
       .filter((e) => {
-        const d = parseEventDate(e.date);
+        const d = parseEventDate(getEventDate(e));
         return d && d >= now;
       })
       .sort((a, b) => {
-        const da = parseEventDate(a.date)!;
-        const db = parseEventDate(b.date)!;
+        const da = parseEventDate(getEventDate(a))!;
+        const db = parseEventDate(getEventDate(b))!;
         return da.getTime() - db.getTime();
       })
       .slice(0, 6);
@@ -448,7 +463,7 @@ function VideoSection() {
 }
 
 function EventCard({ event }: { event: ApprovedEvent }) {
-  const d = parseEventDate(event.date);
+  const d = parseEventDate(getEventDate(event));
   const badgeClass = PILLAR_BADGE[event.pillar ?? ""] ?? "bg-gray-100 text-gray-700";
 
   return (
@@ -482,10 +497,10 @@ function EventCard({ event }: { event: ApprovedEvent }) {
               {event.locationName}
             </span>
           )}
-          {event.startTime && (
+          {event.timeStart && (
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" />
-              {event.startTime}
+              {event.timeStart}
             </span>
           )}
         </div>
@@ -506,12 +521,12 @@ function MemberHome() {
     now.setHours(0, 0, 0, 0);
     return [...events]
       .filter((e) => {
-        const d = parseEventDate(e.date);
+        const d = parseEventDate(getEventDate(e));
         return d && d >= now;
       })
       .sort((a, b) => {
-        const da = parseEventDate(a.date)!;
-        const db = parseEventDate(b.date)!;
+        const da = parseEventDate(getEventDate(a))!;
+        const db = parseEventDate(getEventDate(b))!;
         return da.getTime() - db.getTime();
       })
       .slice(0, 6);
